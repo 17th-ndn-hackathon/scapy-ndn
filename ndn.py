@@ -1,11 +1,13 @@
 import struct
 
 from scapy.all import Field, Packet, XByteField, StrLenField, \
-                      PacketListField, conf, StrFixedLenField
+                      PacketListField, conf, StrFixedLenField, \
+                      PacketField
 
 TYPES = {
           'ImplicitSha256DigestComponent': 0x01,
           'ParametersSha256DigestComponent': 0x02,
+          'Interest': 0x05,
           'Name': 0x07,
           'GenericNameComponent': 0x08
         }
@@ -30,6 +32,9 @@ class NdnLenField(Field):
 
     def addfield(self, pkt, s, val):
         x = self.i2m(pkt, val)
+        if not x:
+            return s
+
         if x < 253:
             return s + struct.pack(">B", x)
         elif x < 65536:
@@ -67,7 +72,7 @@ class NameComponent(Packet):
     fields_desc = [
                     NdnTypeField("type", TYPES['GenericNameComponent']),
                     NdnLenField("length", None),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    StrLenField("value", "test", length_from=lambda pkt: pkt.length)
                   ]
 
     def guess_payload_class(self, p):
@@ -94,13 +99,20 @@ class Name(Packet):
     name = "Name"
 
     fields_desc = [
-                    XByteField("type", TYPES['Name']),
+                    NdnTypeField("type", TYPES['Name']),
                     NdnLenField("length", None),
-                    PacketListField("value", [],
-                                    NameComponent,
-                                    count_from=lambda pkt : Name.count_components(pkt))
+                    PacketListField("value", NameComponent(), NameComponent,
+                                    length_from=lambda pkt : pkt.length)
                   ]
 
-    def count_components(pkt):
-        print("sjvdbjhsb")
-        return 2
+
+class Interest(Packet):
+    name = "Interest"
+    default_name = Name(value=NameComponent(value="test1"))
+
+    fields_desc = [
+                    NdnTypeField("type", TYPES['Interest']),
+                    NdnLenField("length", None),
+                    # InterestName and not name. Otherwise it conflicts with name field of scapy
+                    PacketField("InterestName", Name(), Name),
+                  ]
