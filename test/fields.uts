@@ -1,0 +1,40 @@
+% Regression tests for Scapy NDN regarding NdnLenField and NdnTypeField
+
+############
+############
++ Tests on NDN basic fields
+
+= Ndn Length Field tests
+
+from ndn import NdnLenField, NameComponent
+
+# Empty
+assert NdnLenField().addfield(Raw(""), b"\x08", None) == b"\x08"
+assert NdnLenField().addfield(None, b"", None) == b""
+
+# Already defined length
+assert NdnLenField().addfield(None, b"", 8) == b"\x08"
+
+# Length of value="test" is 4
+assert NdnLenField().addfield(Raw("test"), b"\x08", None) == b"\x08\x04"
+# NameComponent contains the type and length fields which should be skipped when calculating length
+assert NdnLenField().addfield(NameComponent(value="test"), b"\x08", None) == b"\x08\x04"
+
+p = "test" * 1000
+assert NdnLenField().addfield(Raw(p), b"\x08", None) == b"\x08\xfd\x0f\xa0"
+
+q = "test" * 100000
+assert NdnLenField().addfield(Raw(q), b"\x08", None) == b"\x08\xfe\x00\x06\x1a\x80"
+
+# Takes time to run:
+# r = "test" * 2000000000
+# assert NdnLenField().addfield(Raw(r), b"\x08", None) == b'\x08\xff\x00\x00\x00\x01\xdc\xd6\x50\x00'
+
+assert NdnLenField().getfield(None, b"") == (None, None)
+assert NdnLenField().getfield(None, b"\x04test") == ("test", 4)
+# Technically illegal packet - but someone should be able to form
+assert NdnLenField().getfield(None, b"\x04tes") == ("tes", 4)
+assert NdnLenField().getfield(None, b"\xfd\x0f\xa0{}".format(p)) == (p, 4000)
+assert NdnLenField().getfield(None, b"\xfe\x00\x06\x1a\x80{}".format(q)) == (q, 400000)
+# Test w/o value - too slow/resource intensive
+assert NdnLenField().getfield(None, b"\xff\x00\x00\x00\x01\xdc\xd6\x50\x00") == ("", 8000000000)
