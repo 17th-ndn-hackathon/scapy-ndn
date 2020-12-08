@@ -38,3 +38,22 @@ assert NdnLenField().getfield(None, b"\xfd\x0f\xa0{}".format(p)) == (p, 4000)
 assert NdnLenField().getfield(None, b"\xfe\x00\x06\x1a\x80{}".format(q)) == (q, 400000)
 # Test w/o value - too slow/resource intensive
 assert NdnLenField().getfield(None, b"\xff\x00\x00\x00\x01\xdc\xd6\x50\x00") == ("", 8000000000)
+
+
+= Name Component tests
+
+nc = NameComponent(value="ndn-cxx")
+assert nc.type == 0x8
+# Not calculated yet
+assert nc.length == None
+assert nc.value == "ndn-cxx"
+
+rnc = raw(nc)
+bnc = NameComponent(rnc)
+assert bnc.length == 0x7
+assert len(nc) == 9
+assert rnc == b"\x08\x07\x6E\x64\x6E\x2D\x63\x78\x78"
+
+# Test NameComponent field boundaries/padding according to length
+nc = NameComponent(b"\x08\x07\x6E\x64\x6E\x2D\x63\x78\x78\x00\x00")
+assert raw(nc.payload) == b"\x00\x00"
