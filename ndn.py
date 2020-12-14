@@ -118,7 +118,7 @@ class NameComponent(Packet):
                 ):
 
         if "value" in fields:
-            print("_ndn_uri: ", _ndn_uri, "value: ", fields["value"])
+            # print("_ndn_uri: ", _ndn_uri, "value: ", fields["value"])
             if isinstance(fields["value"], str) and _ndn_uri:
                 fields["type"], fields["value"] = NameComponent.from_escaped_string(fields["value"])
             elif isinstance(fields["value"], int):
@@ -182,19 +182,35 @@ class NameComponent(Packet):
 
     @staticmethod
     def from_number(x):
+        if x < 0 or not isinstance(x, int):
+            x = 0
+
         if x <= 255:
             s = struct.pack(">B", x)
             l = 1
         elif x < 65535:
             s = struct.pack(">H", x)
-            l = 3
+            l = 2
         elif x < 4294967295:
             s = struct.pack(">L", x)
-            l = 5
+            l = 4
         else:
             s = struct.pack(">Q", x)
-            l = 9
+            l = 8
         return l, s
+
+    def to_number(self):
+        fld, val = self.getfield_and_val("value")
+        if self.length == 1:
+            return struct.unpack(">B", val)[0]
+        elif self.length == 2:
+            return struct.unpack(">H", val)[0]
+        elif self.length == 4:
+            return struct.unpack(">L", val)[0]
+        elif self.length == 8:
+            return struct.unpack(">Q", val)[0]
+        else:
+            return -1
 
     @staticmethod
     def from_number_with_marker():

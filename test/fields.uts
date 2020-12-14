@@ -6,7 +6,7 @@
 
 = Ndn Length Field tests
 
-from ndn import NdnLenField, NameComponent
+from ndn import NdnLenField, NameComponent, TYPES
 
 # Empty
 assert NdnLenField().addfield(Raw(""), b"\x08", None) == b"\x08"
@@ -43,7 +43,7 @@ assert NdnLenField().getfield(None, b"\xff\x00\x00\x00\x01\xdc\xd6\x50\x00") == 
 = Name Component tests
 
 nc = NameComponent(value="ndn-cxx")
-assert nc.type == 0x8
+assert nc.type == TYPES['GenericNameComponent']
 # Not calculated yet
 assert nc.length == None
 assert nc.value == "ndn-cxx"
@@ -57,3 +57,12 @@ assert rnc == b"\x08\x07\x6E\x64\x6E\x2D\x63\x78\x78"
 # Test NameComponent field boundaries/padding according to length
 nc = NameComponent(b"\x08\x07\x6E\x64\x6E\x2D\x63\x78\x78\x00\x00")
 assert raw(nc.payload) == b"\x00\x00"
+
+# Non negative integer test
+for item in [ (20, 1, b"\x14"), (4500, 2, b"\x11\x94"), (70000, 4, b"\x00\x01\x11\x70"),
+              (4294967296, 8, b"\x00\x00\x00\x01\x00\x00\x00\x00") ]:
+    nc = NameComponent(value=item[0])
+    assert nc.type == TYPES['GenericNameComponent']
+    assert nc.to_number() == item[0]
+    assert nc.length == item[1]
+    assert nc.value == item[2]
