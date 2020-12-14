@@ -4,15 +4,34 @@ from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, XIntField
 
+# Use decimal instead of hex?
 TYPES = {
-          'ImplicitSha256DigestComponent': 0x01,
-          'ParametersSha256DigestComponent': 0x02,
-          'Interest': 0x05,
-          'Name': 0x07,
-          'GenericNameComponent': 0x08,
-          'CanBePrefix': 0x21, # 33
-          'MustBeFresh': 0x12, # 18
-          'Nonce': 0x0a,
+          "ImplicitSha256DigestComponent": 0x01,
+          "ParametersSha256DigestComponent": 0x02,
+          "Interest": 0x05,
+          "Name": 0x07,
+          "GenericNameComponent": 0x08,
+          "CanBePrefix": 0x21, # 33
+          "MustBeFresh": 0x12, # 18
+          "Nonce": 0x0a,
+        }
+
+TYPED_NAME_COMP = {
+          "SegmentNameComponent": 0x20,
+          "ByteOffsetNameComponent": 0x21,
+          "VersionNameComponent": 0x22,
+          "TimestampNameComponent": 0x23,
+          "SequenceNumNameComponent": 0x24
+        }
+
+COMP_TYPES = {
+          "sha256digest": TYPES["ImplicitSha256DigestComponent"],
+          "params-sha256": TYPES["ParametersSha256DigestComponent"],
+          "seg": TYPED_NAME_COMP["SegmentNameComponent"],
+          "off": TYPED_NAME_COMP["ByteOffsetNameComponent"],
+          "v": TYPED_NAME_COMP["VersionNameComponent"],
+          "t": TYPED_NAME_COMP["TimestampNameComponent"],
+          "seq": TYPED_NAME_COMP["SequenceNumNameComponent"],
         }
 
 class NdnLenField(Field):
@@ -89,6 +108,25 @@ class NameComponent(Packet):
                     StrLenField("value", "", length_from=lambda pkt: pkt.length)
                   ]
 
+    def __init__(self,
+                 _pkt=b"",  # type: bytes
+                 post_transform=None,  # type: Any
+                 _internal=0,  # type: int
+                 _underlayer=None,  # type: Optional[Packet]
+                 _ndn_uri=False,
+                 **fields  # type: Any
+                ):
+
+        if "value" in fields:
+            print("_ndn_uri: ", _ndn_uri, "value: ", fields["value"])
+            if isinstance(fields["value"], str) and _ndn_uri:
+                fields["type"], fields["value"] = NameComponent.from_escaped_string(fields["value"])
+            elif isinstance(fields["value"], int):
+                fields["length"], fields["value"] = NameComponent.from_number(fields["value"])
+            elif isinstance(fields["value"], float):
+                pass
+        Packet.__init__(self, _pkt, post_transform, _internal, _underlayer, **fields)
+
     def guess_payload_class(self, p):
         return conf.padding_layer
 
@@ -122,24 +160,41 @@ class NameComponent(Packet):
         return unescaped
 
     @staticmethod
-    def from_escaped_string(input):
+    def from_escaped_string(input, use_known=True):
         # Could use urllib only if python3
 
         # Don't handle . or .. (should be able to construct invalid packets in Scapy)
         if "=" not in input:
-            return NameComponent(value=NameComponent._unescape(input))
+            return TYPES['GenericNameComponent'], NameComponent._unescape(input)
         else:
             splitName = input.split("=")
             # Don't care whether nameType is in valid range
-            nameType = int(splitName[0])
-            return NameComponent(type=nameType,
-                                 value=NameComponent._unescape("".join(input.split("=")[1:])))
+            try:
+                nameType = int(splitName[0])
+            except ValueError:
+                nameType = splitName[0]
 
-            # Handle cases for sha256digest, etc.
+            if use_known:
+                if nameType in COMP_TYPES:
+                    nameType = COMP_TYPES[nameType]
+
+            return nameType, NameComponent._unescape("".join(input.split("=")[1:]))
 
     @staticmethod
-    def from_number():
-        pass
+    def from_number(x):
+        if x <= 255:
+            s = struct.pack(">B", x)
+            l = 1
+        elif x < 65535:
+            s = struct.pack(">H", x)
+            l = 3
+        elif x < 4294967295:
+            s = struct.pack(">L", x)
+            l = 5
+        else:
+            s = struct.pack(">Q", x)
+            l = 9
+        return l, s
 
     @staticmethod
     def from_number_with_marker():
@@ -167,6 +222,7 @@ class NameComponent(Packet):
 
 # Following two classes given for convenience:
 class Sha256Digest(NameComponent):
+    name = "ImplicitSha256DigestComponent"
 
     fields_desc = [
                     NdnTypeField(TYPES['ImplicitSha256DigestComponent']),
@@ -175,6 +231,7 @@ class Sha256Digest(NameComponent):
                   ]
 
 class ParamsSha256(NameComponent):
+    name = "ParametersSha256DigestComponent"
 
     fields_desc = [
                     NdnTypeField(TYPES['ParametersSha256DigestComponent']),
@@ -188,6 +245,7 @@ class Name(Packet):
     fields_desc = [
                     NdnTypeField(TYPES['Name']),
                     NdnLenField(),
+                    # Check only for valid NameComponents when reading?
                     PacketListField("value", NameComponent(), NameComponent,
                                     length_from=lambda pkt : pkt.length)
                   ]
@@ -211,17 +269,17 @@ class Nonce(Packet):
                     XIntField("value", 2)
                   ]
 
-class Interest(Packet):
-    name = "Interest"
-    default_name = Name(value=NameComponent(value="test1"))
+#class Interest(Packet):
+#    name = "Interest"
+#    default_name = Name(value=NameComponent(value="test1"))
 
-    fields_desc = [
-                    NdnTypeField(TYPES['Interest']),
-                    NdnLenField(),
+#    fields_desc = [
+#                    NdnTypeField(TYPES['Interest']),
+#                    NdnLenField(),
                     # InterestName and not name. Otherwise it conflicts
                     # with name field of scapy Packet (base) class
-                    PacketField("interestName", Name(), Name),
-                    StrLenField("canBePrefix", "", 1),
-                    StrLenField("mustBeFresh", "", 1),
-                    StrLenField("nonce", "", 1),
-                  ]
+#                    PacketField("interestName", Name(), Name),
+#                    StrLenField("canBePrefix", "", 1),
+#                    StrLenField("mustBeFresh", "", 1),
+#                    StrLenField("nonce", "", 1),
+#                  ]
