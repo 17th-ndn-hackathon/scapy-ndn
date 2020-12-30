@@ -4,34 +4,33 @@ from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, XIntField
 
-# Use decimal instead of hex?
 TYPES = {
-          "ImplicitSha256DigestComponent": 0x01,
-          "ParametersSha256DigestComponent": 0x02,
-          "Interest": 0x05,
-          "Name": 0x07,
-          "GenericNameComponent": 0x08,
-          "CanBePrefix": 0x21, # 33
-          "MustBeFresh": 0x12, # 18
-          "Nonce": 0x0a,
+          "ImplicitSha256DigestComponent"  : 1,
+          "ParametersSha256DigestComponent": 2,
+          "Interest"                       : 5,
+          "Name"                           : 7,
+          "GenericNameComponent"           : 8,
+          "CanBePrefix"                    : 33, # 0x21
+          "MustBeFresh"                    : 18, # 0x12
+          "Nonce"                          : 10, # 0x0a
         }
 
 TYPED_NAME_COMP = {
-          "SegmentNameComponent": 0x20,
-          "ByteOffsetNameComponent": 0x21,
-          "VersionNameComponent": 0x22,
-          "TimestampNameComponent": 0x23,
-          "SequenceNumNameComponent": 0x24
+          "SegmentNameComponent"    : 32, # 0x20
+          "ByteOffsetNameComponent" : 33, # 0x21
+          "VersionNameComponent"    : 34, # 0x22
+          "TimestampNameComponent"  : 35, # 0x23
+          "SequenceNumNameComponent": 36, # 0x24
         }
 
 COMP_TYPES = {
-          "sha256digest": TYPES["ImplicitSha256DigestComponent"],
+          "sha256digest" : TYPES["ImplicitSha256DigestComponent"],
           "params-sha256": TYPES["ParametersSha256DigestComponent"],
-          "seg": TYPED_NAME_COMP["SegmentNameComponent"],
-          "off": TYPED_NAME_COMP["ByteOffsetNameComponent"],
-          "v": TYPED_NAME_COMP["VersionNameComponent"],
-          "t": TYPED_NAME_COMP["TimestampNameComponent"],
-          "seq": TYPED_NAME_COMP["SequenceNumNameComponent"],
+          "seg"          : TYPED_NAME_COMP["SegmentNameComponent"],
+          "off"          : TYPED_NAME_COMP["ByteOffsetNameComponent"],
+          "v"            : TYPED_NAME_COMP["VersionNameComponent"],
+          "t"            : TYPED_NAME_COMP["TimestampNameComponent"],
+          "seq"          : TYPED_NAME_COMP["SequenceNumNameComponent"],
         }
 
 class NdnLenField(Field):
@@ -124,7 +123,8 @@ class NameComponent(Packet):
             elif isinstance(fields["value"], int):
                 fields["length"], fields["value"] = NameComponent.from_number(fields["value"])
             elif isinstance(fields["value"], float):
-                pass
+                fields["value"] = NameComponent.from_double(fields["value"])
+
         Packet.__init__(self, _pkt, post_transform, _internal, _underlayer, **fields)
 
     def guess_payload_class(self, p):
@@ -211,6 +211,14 @@ class NameComponent(Packet):
             return struct.unpack(">Q", val)[0]
         else:
             return -1
+
+    @staticmethod
+    def from_double(x):
+        return struct.pack(">d", x)
+
+    def to_double(self):
+        fld, val = self.getfield_and_val("value")
+        return struct.unpack(">d", val)[0]
 
     @staticmethod
     def from_number_with_marker():
