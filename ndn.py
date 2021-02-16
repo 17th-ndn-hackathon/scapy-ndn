@@ -4,6 +4,27 @@ from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, XIntField
 
+CONVENTIONS = { "MARKED": 1, "TYPED": 2, "EITHER": 3 }
+
+ENCODING_CONVENTION = CONVENTIONS["MARKED"]
+DECODING_CONVENTION = CONVENTIONS["EITHER"]
+
+MARKERS = {
+            "SEGMENT_MARKER"         : 0x00,
+            "SEGMENT_OFFSET_MARKER"  : 0xFB,
+            "VERSION_MARKER"         : 0xFD,
+            "TIMESTAMP_MARKER"       : 0xFC,
+            "SEQUENCE_NUMBER_MARKER" : 0xFE,
+          }
+
+MARKER_TYPES = {
+                 "seg"          : MARKERS["SEGMENT_MARKER"],
+                 "off"          : MARKERS["SEGMENT_OFFSET_MARKER"],
+                 "v"            : MARKERS["VERSION_MARKER"],
+                 "t"            : MARKERS["TIMESTAMP_MARKER"],
+                 "seq"          : MARKERS["SEQUENCE_NUMBER_MARKER"],
+               }
+
 TYPES = {
           "ImplicitSha256DigestComponent"  : 1,
           "ParametersSha256DigestComponent": 2,
@@ -16,9 +37,9 @@ TYPES = {
         }
 
 TYPED_NAME_COMP = {
-          "SegmentNameComponent"    : 32, # 0x20
-          "ByteOffsetNameComponent" : 33, # 0x21
-          "VersionNameComponent"    : 34, # 0x22
+          "SegmentNameComponent"    : 33, # 0x20
+          "ByteOffsetNameComponent" : 34, # 0x21
+          "VersionNameComponent"    : 35, # 0x22
           "TimestampNameComponent"  : 35, # 0x23
           "SequenceNumNameComponent": 36, # 0x24
         }
@@ -119,9 +140,9 @@ class NameComponent(Packet):
         if "value" in fields:
             # print("_ndn_uri: ", _ndn_uri, "value: ", fields["value"])
             if isinstance(fields["value"], str) and _ndn_uri:
-                fields["type"], fields["value"] = NameComponent.from_escaped_string(fields["value"])
+                fields["type"], fields["value"] = NameComponent._get_escaped_type_value(fields["value"])
             elif isinstance(fields["value"], int):
-                fields["length"], fields["value"] = NameComponent.from_number(fields["value"])
+                fields["length"], fields["value"] = NameComponent._get_num_len_value(fields["value"])
             elif isinstance(fields["value"], float):
                 fields["value"] = NameComponent.from_double(fields["value"])
 
@@ -141,47 +162,72 @@ class NameComponent(Packet):
         return -1
 
     @staticmethod
-    def _unescape(input):
+    def _unescape(input_str):
         unescaped = ""
         i = 0
-        while i < len(input):
-            if input[i] == "%" and i + 2 < len(input):
-                hi = NameComponent._from_hex_char(ord(input[i + 1]))
-                lo = NameComponent._from_hex_char(ord(input[i + 2]))
+        while i < len(input_str):
+            if input_str[i] == "%" and i + 2 < len(input_str):
+                hi = NameComponent._from_hex_char(ord(input_str[i + 1]))
+                lo = NameComponent._from_hex_char(ord(input_str[i + 2]))
 
                 if hi < 0 or lo < 0:
-                    unescaped += input[i] + input[i + 1] + input[i + 2]
+                    unescaped += input_str[i] + input_str[i + 1] + input_str[i + 2]
                 else:
                     unescaped += chr(hi << 4 | lo)
                 i += 2
             else:
-                unescaped += input[i]
+                unescaped += input_str[i]
             i += 1
         return unescaped
 
     @staticmethod
-    def from_escaped_string(input, use_known=True):
+    def _get_escaped_type_value(input_str, use_known=True):
         # Could use urllib only if python3
 
         # Don't handle . or .. (should be able to construct invalid packets in Scapy)
-        if "=" not in input:
-            return TYPES['GenericNameComponent'], NameComponent._unescape(input)
+        if "=" not in input_str:
+            return TYPES['GenericNameComponent'], NameComponent._unescape(input_str)
         else:
-            splitName = input.split("=")
-            # Don't care whether nameType is in valid range
+            splitName = input_str.split("=")
+            if ENCODING_CONVENTION == CONVENTIONS["MARKED"]:
+                t = TYPES['GenericNameComponent']
+            else:
+                # Don't care whether nameType is in valid range
+                try:
+                    t = int(splitName[0])
+                except ValueError:
+                    t = splitName[0]
+
+                    if t in COMP_TYPES:
+                        t = COMP_TYPES[t]
+
+            v = input_str.split("=")[1]
             try:
-                nameType = int(splitName[0])
+                v = int(v)
+                l, v = NameComponent._get_num_len_value(v)
+                print(v)
+                if ENCODING_CONVENTION == CONVENTIONS["MARKED"]:
+                    v = struct.pack(">B", MARKER_TYPES[splitName[0]]) + v
             except ValueError:
-                nameType = splitName[0]
+                pass
 
-            if use_known:
-                if nameType in COMP_TYPES:
-                    nameType = COMP_TYPES[nameType]
+            try:
+                v = float(v)
+                v = NameComponent.from_double(v)
+            except ValueError:
+                pass
 
-            return nameType, NameComponent._unescape("".join(input.split("=")[1:]))
+            if isinstance(v, str):
+                v = NameComponent._unescape(v)
+
+            return t, v
 
     @staticmethod
-    def from_number(x):
+    def from_escaped_string(input_str, comp_type=TYPES['GenericNameComponent']):
+        return NameComponent(comp_type, None, input_str)
+
+    @staticmethod
+    def _get_num_len_value(x):
         if x < 0 or not isinstance(x, int):
             x = 0
 
@@ -198,6 +244,10 @@ class NameComponent(Packet):
             s = struct.pack(">Q", x)
             l = 8
         return l, s
+
+    @staticmethod
+    def from_number(x, comp_type=TYPES['GenericNameComponent']):
+        return NameComponent(type=comp_type, value=x)
 
     def to_number(self):
         fld, val = self.getfield_and_val("value")
@@ -221,12 +271,14 @@ class NameComponent(Packet):
         return struct.unpack(">d", val)[0]
 
     @staticmethod
-    def from_number_with_marker():
-        pass
+    def from_number_with_marker(marker, number):
+        l, v = NameComponent._get_num_len_value(number)
+        v = struct.pack(">B", marker) + v
+        return NameComponent(length=l + 1, value=v)
 
     @staticmethod
-    def from_version():
-        pass
+    def from_version(x):
+        return NameComponent(value="v={}".format(x), _ndn_uri=True)
 
     @staticmethod
     def from_timestamp():
