@@ -107,6 +107,10 @@ class NdnTypeField(NdnLenField):
         NdnLenField.__init__(self, name, default, fmt)
 
     def i2m(self, pkt, x):
+        print(x)
+        if isinstance(x, str) and x in COMP_TYPES:
+            x = COMP_TYPES[x]
+
         if x is None:
             fld, fval = pkt.getfield_and_val(self.name)
             if x is None:
@@ -133,14 +137,12 @@ class NameComponent(Packet):
                  post_transform=None,  # type: Any
                  _internal=0,  # type: int
                  _underlayer=None,  # type: Optional[Packet]
-                 _ndn_uri=False,
                  **fields  # type: Any
                 ):
 
         if "value" in fields:
-            # print("_ndn_uri: ", _ndn_uri, "value: ", fields["value"])
-            if isinstance(fields["value"], str) and _ndn_uri:
-                fields["type"], fields["value"] = NameComponent._get_escaped_type_value(fields["value"])
+            if isinstance(fields["value"], str):
+                fields["value"] = NameComponent._unescape(fields["value"])
             elif isinstance(fields["value"], int):
                 fields["length"], fields["value"] = NameComponent._get_num_len_value(fields["value"])
             elif isinstance(fields["value"], float):
@@ -181,46 +183,9 @@ class NameComponent(Packet):
         return unescaped
 
     @staticmethod
-    def _get_escaped_type_value(input_str, use_known=True):
-        # Could use urllib only if python3
-
-        # Don't handle . or .. (should be able to construct invalid packets in Scapy)
-        if "=" not in input_str:
-            return TYPES['GenericNameComponent'], NameComponent._unescape(input_str)
-        else:
-            splitName = input_str.split("=")
-
-            # Don't care whether nameType is in valid range
-            try:
-                t = int(splitName[0])
-            except ValueError:
-                t = splitName[0]
-
-                if t in COMP_TYPES:
-                    t = COMP_TYPES[t]
-
-            v = splitName[1]
-            try:
-                v = int(v)
-                l, v = NameComponent._get_num_len_value(v)
-            except ValueError:
-                pass
-
-            try:
-                v = float(v)
-                v = NameComponent.from_double(v)
-            except ValueError:
-                pass
-
-            if isinstance(v, str):
-                v = NameComponent._unescape(v)
-
-            return t, v
-
-    @staticmethod
     def from_escaped_string(input_str):
         # To make output compatible with ndn-cxx
-        return NameComponent(value=input_str, _ndn_uri=True)
+        return NameComponent(value=input_str)
 
     @staticmethod
     def _get_num_len_value(x):
@@ -228,18 +193,13 @@ class NameComponent(Packet):
             x = 0
 
         if x <= 255:
-            s = struct.pack(">B", x)
-            l = 1
+            return 1, struct.pack(">B", x)
         elif x < 65535:
-            s = struct.pack(">H", x)
-            l = 2
+            return 2, struct.pack(">H", x)
         elif x < 4294967295:
-            s = struct.pack(">L", x)
-            l = 4
+            return 4, struct.pack(">L", x)
         else:
-            s = struct.pack(">Q", x)
-            l = 8
-        return l, s
+            return 8, struct.pack(">Q", x)
 
     @staticmethod
     def from_number(x, comp_type=TYPES['GenericNameComponent']):
@@ -274,7 +234,10 @@ class NameComponent(Packet):
 
     @staticmethod
     def from_version(x):
-        return NameComponent(value="v={}".format(x), _ndn_uri=True)
+        return NameComponent(type="v", value=x)
+
+    def to_version(self):
+        return self.to_number()
 
     @staticmethod
     def from_timestamp():
