@@ -1,4 +1,5 @@
 import struct
+from datetime import datetime, timedelta
 
 from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
@@ -37,11 +38,11 @@ TYPES = {
         }
 
 TYPED_NAME_COMP = {
-          "SegmentNameComponent"    : 33, # 0x20
-          "ByteOffsetNameComponent" : 34, # 0x21
-          "VersionNameComponent"    : 35, # 0x22
-          "TimestampNameComponent"  : 35, # 0x23
-          "SequenceNumNameComponent": 36, # 0x24
+          "SegmentNameComponent"    : 33, # 0x21
+          "ByteOffsetNameComponent" : 34, # 0x22
+          "VersionNameComponent"    : 35, # 0x23
+          "TimestampNameComponent"  : 36, # 0x24
+          "SequenceNumNameComponent": 37, # 0x25
         }
 
 COMP_TYPES = {
@@ -107,7 +108,6 @@ class NdnTypeField(NdnLenField):
         NdnLenField.__init__(self, name, default, fmt)
 
     def i2m(self, pkt, x):
-        print(x)
         if isinstance(x, str) and x in COMP_TYPES:
             x = COMP_TYPES[x]
 
@@ -240,8 +240,12 @@ class NameComponent(Packet):
         return self.to_number()
 
     @staticmethod
-    def from_timestamp():
-        pass
+    def from_timestamp(timepoint):
+        microseconds = int((timepoint - datetime(1970, 1, 1)) / timedelta(microseconds=1))
+        return NameComponent(type="t", value=microseconds)
+
+    def to_timestamp(self):
+        return datetime(1970, 1, 1) + timedelta(microseconds=self.to_number())
 
     @staticmethod
     def from_sequence_number():
