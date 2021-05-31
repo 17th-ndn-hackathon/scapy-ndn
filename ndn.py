@@ -4,9 +4,9 @@ from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, XIntField
 
-CONVENTIONS = { "MARKED": 1, "TYPED": 2, "EITHER": 3 }
+CONVENTIONS = { "MARKER": 1, "TYPED": 2, "EITHER": 3 }
 
-ENCODING_CONVENTION = CONVENTIONS["MARKED"]
+ENCODING_CONVENTION = CONVENTIONS["MARKER"]
 DECODING_CONVENTION = CONVENTIONS["EITHER"]
 
 MARKERS = {
@@ -189,25 +189,20 @@ class NameComponent(Packet):
             return TYPES['GenericNameComponent'], NameComponent._unescape(input_str)
         else:
             splitName = input_str.split("=")
-            if ENCODING_CONVENTION == CONVENTIONS["MARKED"]:
-                t = TYPES['GenericNameComponent']
-            else:
-                # Don't care whether nameType is in valid range
-                try:
-                    t = int(splitName[0])
-                except ValueError:
-                    t = splitName[0]
 
-                    if t in COMP_TYPES:
-                        t = COMP_TYPES[t]
+            # Don't care whether nameType is in valid range
+            try:
+                t = int(splitName[0])
+            except ValueError:
+                t = splitName[0]
 
-            v = input_str.split("=")[1]
+                if t in COMP_TYPES:
+                    t = COMP_TYPES[t]
+
+            v = splitName[1]
             try:
                 v = int(v)
                 l, v = NameComponent._get_num_len_value(v)
-                print(v)
-                if ENCODING_CONVENTION == CONVENTIONS["MARKED"]:
-                    v = struct.pack(">B", MARKER_TYPES[splitName[0]]) + v
             except ValueError:
                 pass
 
@@ -223,8 +218,9 @@ class NameComponent(Packet):
             return t, v
 
     @staticmethod
-    def from_escaped_string(input_str, comp_type=TYPES['GenericNameComponent']):
-        return NameComponent(comp_type, None, input_str)
+    def from_escaped_string(input_str):
+        # To make output compatible with ndn-cxx
+        return NameComponent(value=input_str, _ndn_uri=True)
 
     @staticmethod
     def _get_num_len_value(x):
