@@ -9,7 +9,7 @@
 #import sys
 #print(sys.path)
 
-from ndn import NdnLenField, NameComponent, TYPES, COMP_TYPES
+from ndn import NdnLenField, NameComponent, Sha256Digest, TYPES, COMP_TYPES
 
 # Empty
 assert NdnLenField().addfield(Raw(""), b"\x08", None) == b"\x08"
@@ -47,6 +47,7 @@ assert NdnLenField().getfield(None, b"\xfe\x00\x06\x1a\x80" + q.encode('ascii'))
 = Name Component tests
 
 nc = NameComponent(value="ndn-cxx")
+print(nc.type)
 assert nc.type == TYPES['GenericNameComponent']
 # Not calculated yet
 assert nc.length == None
@@ -80,3 +81,10 @@ rnc = raw(nc)
 bnc = NameComponent(rnc)
 assert bnc.type == COMP_TYPES["v"]
 assert rnc == b"\x23\x01\x14"
+
+nc = Sha256Digest(value="28bad4b5275bd392dbb670c75cf0b66f13f7942b21e80f55c0e86b374753a548")
+rnc = raw(nc)
+bnc = Sha256Digest(rnc)
+assert bnc.type == COMP_TYPES["sha256digest"]
+bnc.show2()
+hexdump(bnc)

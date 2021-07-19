@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
-                      PacketField, XIntField
+                      PacketField, XIntField, bind_layers
 
 CONVENTIONS = { "MARKER": 1, "TYPED": 2, "EITHER": 3 }
 
@@ -38,12 +38,15 @@ TYPES = {
         }
 
 TYPED_NAME_COMP = {
+          "GenericNameComponent"    : 8,
           "SegmentNameComponent"    : 33, # 0x21
           "ByteOffsetNameComponent" : 34, # 0x22
           "VersionNameComponent"    : 35, # 0x23
           "TimestampNameComponent"  : 36, # 0x24
           "SequenceNumNameComponent": 37, # 0x25
         }
+
+NUM_TO_TYPED_NAME_COMP = {v: k for k, v in TYPED_NAME_COMP.items()}
 
 COMP_TYPES = {
           "sha256digest" : TYPES["ImplicitSha256DigestComponent"],
@@ -117,6 +120,11 @@ class NdnTypeField(NdnLenField):
                 x = fld.i2len(pkt, fval)
         return x
 
+    def i2repr(self, pkt, x):
+        if x in NUM_TO_TYPED_NAME_COMP:
+            return "{} [{}]".format(NUM_TO_TYPED_NAME_COMP[x], x)
+        return x
+
 class NameComponent(Packet):
     name = "Name Component"
 
@@ -137,11 +145,12 @@ class NameComponent(Packet):
                  post_transform=None,  # type: Any
                  _internal=0,  # type: int
                  _underlayer=None,  # type: Optional[Packet]
+                 _unescape=True,
                  **fields  # type: Any
                 ):
 
         if "value" in fields:
-            if isinstance(fields["value"], str):
+            if isinstance(fields["value"], str) and _unescape:
                 fields["value"] = NameComponent._unescape(fields["value"])
             elif isinstance(fields["value"], int):
                 fields["length"], fields["value"] = NameComponent._get_num_len_value(fields["value"])
@@ -152,6 +161,9 @@ class NameComponent(Packet):
 
     def guess_payload_class(self, p):
         return conf.padding_layer
+
+    def show2(self, dump=False, indent=3, lvl="", label_lvl=""):
+        return super(NameComponent, self).show2(dump, indent, lvl, label_lvl)
 
     @staticmethod
     def _from_hex_char(c):
@@ -184,7 +196,6 @@ class NameComponent(Packet):
 
     @staticmethod
     def from_escaped_string(input_str):
-        # To make output compatible with ndn-cxx
         return NameComponent(value=input_str)
 
     @staticmethod
@@ -241,7 +252,7 @@ class NameComponent(Packet):
 
     @staticmethod
     def from_timestamp(timepoint):
-        microseconds = int((timepoint - datetime(1970, 1, 1)) / timedelta(microseconds=1))
+        microseconds = int((timepoint - datetime(1970, 1, 1)).total_seconds() * 1000000)
         return NameComponent(type="t", value=microseconds)
 
     def to_timestamp(self):
@@ -259,7 +270,7 @@ class NameComponent(Packet):
     def from_parameters_sha256_digest():
         pass
 
-# Following two classes given for convenience:
+# Following two classes given for convenience with length field set to 32:
 class Sha256Digest(NameComponent):
     name = "ImplicitSha256DigestComponent"
 
@@ -308,17 +319,17 @@ class Nonce(Packet):
                     XIntField("value", 2)
                   ]
 
-#class Interest(Packet):
-#    name = "Interest"
+class Interest(Packet):
+    name = "Interest"
 #    default_name = Name(value=NameComponent(value="test1"))
 
-#    fields_desc = [
-#                    NdnTypeField(TYPES['Interest']),
-#                    NdnLenField(),
+    fields_desc = [
+                    NdnTypeField(TYPES['Interest']),
+                    NdnLenField(),
                     # InterestName and not name. Otherwise it conflicts
                     # with name field of scapy Packet (base) class
-#                    PacketField("interestName", Name(), Name),
-#                    StrLenField("canBePrefix", "", 1),
-#                    StrLenField("mustBeFresh", "", 1),
-#                    StrLenField("nonce", "", 1),
-#                  ]
+                    PacketField("interestName", Name(), Name),
+                    StrLenField("canBePrefix", "", 1),
+                    StrLenField("mustBeFresh", "", 1),
+                    StrLenField("nonce", "", 1),
+                  ]
