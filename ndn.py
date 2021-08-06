@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
-                      PacketField, XIntField, bind_layers
+                      PacketField, XIntField, bind_layers, ConditionalField, RawVal
 
 CONVENTIONS = { "MARKER": 1, "TYPED": 2, "EITHER": 3 }
 
@@ -34,11 +34,12 @@ TYPES = {
           "GenericNameComponent"           : 8,
           "CanBePrefix"                    : 33, # 0x21
           "MustBeFresh"                    : 18, # 0x12
-          "Nonce"                          : 10, # 0x0a
+          "ForwardingHint"                 : 30, # 0x1E
+          "Nonce"                          : 10, # 0x0A
+          "InterestLifetime"               : 12, # 0x0C
         }
 
 TYPED_NAME_COMP = {
-          "GenericNameComponent"    : 8,
           "SegmentNameComponent"    : 33, # 0x21
           "ByteOffsetNameComponent" : 34, # 0x22
           "VersionNameComponent"    : 35, # 0x23
@@ -46,7 +47,11 @@ TYPED_NAME_COMP = {
           "SequenceNumNameComponent": 37, # 0x25
         }
 
-NUM_TO_TYPED_NAME_COMP = {v: k for k, v in TYPED_NAME_COMP.items()}
+NUM_TO_TYPES = {v: k for k, v in TYPES.items()}
+
+for k, v in TYPES.items():
+    if k not in TYPED_NAME_COMP:
+        NUM_TO_TYPES[k] = v
 
 COMP_TYPES = {
           "sha256digest" : TYPES["ImplicitSha256DigestComponent"],
@@ -71,10 +76,81 @@ class NdnLenField(Field):
             for field in pkt.fields_desc:
                 if field.name != "type" and field.name != "length":
                     fld, fval = pkt.getfield_and_val(field.name)
+                    #print("fval: ", fval)
+                    if fval is None:
+                        continue
                     if x is None:
                         x = fld.i2len(pkt, fval)
                     else:
                         x += fld.i2len(pkt, fval)
+        return x
+
+    def addfield(self, pkt, s, val):
+        #for field in pkt.fields_desc:
+        #    if field.name == "type":
+        #        print("---->", pkt.getfield_and_val(field.name))
+        #print("Adding field: ", s, val)
+        x = self.i2m(pkt, val)
+        if not x:
+            return s
+
+        if x < 253:
+            return s + struct.pack(">B", x)
+        elif x < 65536:
+            return s + b"\xFD" + struct.pack(">H", x)
+        elif x < 4294967296:
+            return s + b"\xFE" + struct.pack(">L", x)
+        else:
+            return s + b"\xFF" + struct.pack(">Q", x)
+
+    def getfield(self, pkt, s):
+        # Type deduction failed, so probably unrecognized packet
+        if pkt.getfield_and_val("type")[-1] is None:
+            print("Yeko", s)
+            return s, None
+
+        if not s:
+            return None, None
+
+        # Check the first octet
+        x = ord(s[:self.sz - 1])
+        if x < 253:
+            return s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
+        elif x == 253:
+            return s[3:], self.m2i(pkt, struct.unpack(">H", s[1:3])[0])
+        elif x == 254:
+            return s[5:], self.m2i(pkt, struct.unpack(">L", s[1:5])[0])
+        else:
+            return s[9:], self.m2i(pkt, struct.unpack(">Q", s[1:9])[0])
+
+class NdnTypeField(Field):
+    __slots__ = ["valid_types"]
+
+    def __init__(self, default, name="type", valid_types=None, fmt="!H"):  # noqa: E501
+        # If valid_types is None then all types expected, for example in NameComponent packet
+        self.valid_types = valid_types
+        NdnLenField.__init__(self, name, default, fmt)
+
+    def i2m(self, pkt, x):
+        print("i2m", x)
+        if isinstance(x, str) and x in COMP_TYPES:
+            x = COMP_TYPES[x]
+
+        if self.name in TYPES and x:
+            return TYPES[self.name]
+
+        if x is None:
+            print("return empty from ndntypefield")
+            return b""
+        return x
+
+    def i2repr(self, pkt, x):
+        # print("i2repr: {}".format(x))
+        #if x in NUM_TO_TYPES:
+        #    #print(NUM_TO_TYPES[x])
+        #    return "{} [{}]".format(NUM_TO_TYPES[x], x)
+        if x is None:
+            return ""
         return x
 
     def addfield(self, pkt, s, val):
@@ -98,32 +174,45 @@ class NdnLenField(Field):
         # Check the first octet
         x = ord(s[:self.sz - 1])
         if x < 253:
-            return s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
+            rest_of_pkt, val = s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
         elif x == 253:
-            return s[3:], self.m2i(pkt, struct.unpack(">H", s[1:3])[0])
+            rest_of_pkt, val = s[3:], self.m2i(pkt, struct.unpack(">H", s[1:3])[0])
         elif x == 254:
-            return s[5:], self.m2i(pkt, struct.unpack(">L", s[1:5])[0])
+            rest_of_pkt, val = s[5:], self.m2i(pkt, struct.unpack(">L", s[1:5])[0])
         else:
-            return s[9:], self.m2i(pkt, struct.unpack(">Q", s[1:9])[0])
+            rest_of_pkt, val = s[9:], self.m2i(pkt, struct.unpack(">Q", s[1:9])[0])
 
-class NdnTypeField(NdnLenField):
-    def __init__(self, default, name="type", fmt="!H"):  # noqa: E501
-        NdnLenField.__init__(self, name, default, fmt)
+        """
+        Go over s one by one, if any val is not in packet, return None since we are unable to
+        determine. If val is in packet but out of order, remove the current value, return the reassbled
+        rest_of_packet
+        """
 
-    def i2m(self, pkt, x):
-        if isinstance(x, str) and x in COMP_TYPES:
-            x = COMP_TYPES[x]
+        if self.name == "MustBeFresh":
+            print(s)
+            print("Must be fresh detected: ", rest_of_pkt, val)
+            for f in pkt.fields_desc:
+                print(f.name, pkt.getfieldval(f.name))
+        if self.valid_types is not None:
+            if val not in self.valid_types:
+                return s, None
 
-        if x is None:
-            fld, fval = pkt.getfield_and_val(self.name)
-            if x is None:
-                x = fld.i2len(pkt, fval)
-        return x
+        #if self.default != val:
+        #    return s, None
 
-    def i2repr(self, pkt, x):
-        if x in NUM_TO_TYPED_NAME_COMP:
-            return "{} [{}]".format(NUM_TO_TYPED_NAME_COMP[x], x)
-        return x
+        # i.e. self.name != (generic) type
+        #if self.name in TYPES:
+        #    print("Getting field: ", s, self.name, self.default)
+        #    if bytes([TYPES[self.name]]) not in s:
+        #        return s, None
+        #    else:
+        #        b = bytes([TYPES[self.name]])
+        #        i = s.index(b)
+        #        print("--->", i)
+        #        if i != 0: # out-of-order field
+        #            print(s)
+            #    return s, None
+        return rest_of_pkt, val
 
 class NameComponent(Packet):
     name = "Name Component"
@@ -145,7 +234,7 @@ class NameComponent(Packet):
                  post_transform=None,  # type: Any
                  _internal=0,  # type: int
                  _underlayer=None,  # type: Optional[Packet]
-                 _unescape=True,
+                 _unescape=False,
                  **fields  # type: Any
                 ):
 
@@ -300,36 +389,104 @@ class Name(Packet):
                                     length_from=lambda pkt : pkt.length)
                   ]
 
-class CanBePrefix(Packet):
-    name = "CanBePrefix"
+    def guess_payload_class(self, p):
+        return conf.padding_layer
 
-    fields_desc = [ NdnTypeField(TYPES['CanBePrefix']) ]
+class CanBePrefix(NdnTypeField):
 
-class MustBeFresh(Packet):
-    name = "MustBeFresh"
+    def __init__(self, fmt="!H"):  # noqa: E501
+        NdnTypeField.__init__(self, "", "CanBePrefix", [TYPES["CanBePrefix"]], fmt)
 
-    fields_desc = [ NdnTypeField(TYPES['MustBeFresh']) ]
+class MustBeFresh(NdnTypeField):
+
+    def __init__(self, fmt="!H"):  # noqa: E501
+        NdnTypeField.__init__(self, "", "MustBeFresh", [TYPES["MustBeFresh"]], fmt)
 
 class Nonce(Packet):
     name = "Nonce"
 
     fields_desc = [
-                    NdnTypeField(TYPES['Nonce']),
+                    NdnTypeField(TYPES['Nonce'], valid_types=[TYPES['Nonce']]),
                     NdnLenField(default=4),
-                    XIntField("value", 2)
+                    ConditionalField(XIntField("value", 2), lambda pkt : pkt.type != None)
+                  ]
+
+class ForwardingHint(Packet):
+    name = "ForwardingHint"
+
+    fields_desc = [
+                    NdnTypeField(TYPES['ForwardingHint']),
+                    NdnLenField(),
+                    ConditionalField(StrFixedLenField("value", ""), lambda pkt : pkt.type != None)
+                  ]
+
+class InterestLifetime(Packet):
+    name = "InterestLifetime"
+
+    fields_desc = [
+                    NdnTypeField(TYPES['InterestLifetime']),
+                    NdnLenField(),
+                    StrFixedLenField("value", "")
                   ]
 
 class Interest(Packet):
     name = "Interest"
-#    default_name = Name(value=NameComponent(value="test1"))
 
     fields_desc = [
                     NdnTypeField(TYPES['Interest']),
                     NdnLenField(),
-                    # InterestName and not name. Otherwise it conflicts
+                    # interestName and not name. Otherwise it conflicts
                     # with name field of scapy Packet (base) class
                     PacketField("interestName", Name(), Name),
-                    StrLenField("canBePrefix", "", 1),
-                    StrLenField("mustBeFresh", "", 1),
-                    StrLenField("nonce", "", 1),
+                    #ConditionalField(CanBePrefix(), lambda pkt : Interest.test(pkt)),
+                    CanBePrefix(),
+                    MustBeFresh(),
+                    PacketField("Nonce", "", Nonce),
+                    #PacketField("canBePrefix", "", CanBePrefix),
+                    #StrField("canBePrefix", ""),
+                    #StrField("mustBePrefix", ""),
+                    #StrFixedLenField("forwardingHint", ""),
+                    #StrFixedLenField("interestLifetime", "")
                   ]
+
+    #def do_dissect(self, s):
+    #    print("---------------------->Interst Dissect: {}".format(s))
+    #    _raw = s
+    #    self.raw_packet_cache_fields = {}
+    #    for f in self.fields_desc:
+    #        if not s:
+    #            print("Interest Dissect Break")
+    #            break
+    #        print("-=======-", s, f, type(f))
+    #        s, fval = f.getfield(self, s)
+
+    #        print("f.name: {}, s: {}, fval: {}".format(f.name, s, fval))
+            # We need to track fields with mutable values to discard
+            # .raw_packet_cache when needed.
+    #        if f.islist or f.holds_packets or f.ismutable:
+    #            self.raw_packet_cache_fields[f.name] = f.do_copy(fval)
+
+            #keyname = f.name
+            #if f.name in TYPES:
+                # Out-of-expected-order fields are received, let's fix that
+            #    print("TYPES[f.name], fval: ", TYPES[f.name], fval)
+            #    if TYPES[f.name] != fval:
+                    #self.fields[f.name] == ""
+            #        break
+                    #if isinstance(fval, int) and fval in NUM_TO_TYPES:
+                    #if isinstance(fval, int):
+                    #    print("Yello: {}".format(NUM_TO_TYPES[fval]))
+                        #keyname = NUM_TO_TYPES[fval]
+                    #    self.fields[NUM_TO_TYPES[fval]] = fval
+                    #    continue
+            #if f.name in self.fields:
+    #        self.fields[f.name] = fval
+
+    #    self.raw_packet_cache = _raw[:-len(s)] if s else _raw
+    #    self.explicit = 1
+    #    return s
+
+    @staticmethod
+    def test(pkt):
+        print("Hello")
+        return True
