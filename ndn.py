@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 
 from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
-                      PacketField, XIntField, bind_layers, ConditionalField, RawVal, Raw
+                      PacketField, XIntField, bind_layers, ConditionalField, \
+                      RawVal, Raw, IP, Ether
 
 from scapy.base_classes import BasePacket, Gen, SetGen
 
@@ -32,6 +33,7 @@ TYPES = {
           "ImplicitSha256DigestComponent"  : 1,
           "ParametersSha256DigestComponent": 2,
           "Interest"                       : 5,
+          "Data"                           : 6,
           "Name"                           : 7,
           "GenericNameComponent"           : 8,
           "CanBePrefix"                    : 33, # 0x21
@@ -450,8 +452,56 @@ class Interest(Packet):
                   ]
 
     def guess_ndn_packets(self, lst, cur, remain, types_to_cls):
-        # print(lst, cur, remain)
         blk = TypeBlock(remain)
         if blk.type in types_to_cls:
             return types_to_cls[blk.type]
         return Raw
+
+class Data(Packet):
+
+    TYPES_TO_CLS = {
+                     TYPES["Name"] : Name
+                   }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['Data']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, Data.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls):
+        blk = TypeBlock(remain)
+        if blk.type in types_to_cls:
+            return types_to_cls[blk.type]
+        return Raw
+
+class NdnGuessPacket(Packet):
+
+    TYPES_TO_CLS = {
+                     TYPES["Interest"] : Interest,
+                     TYPES["Data"] : Data
+                   }
+
+    # Skip printing NdnPacket as this is just a
+    # class with no fields to decide the real packet
+    def _show_or_dump(self,
+                      dump=False,  # type: bool
+                      indent=3,  # type: int
+                      lvl="",  # type: str
+                      label_lvl="",  # type: str
+                      first_call=True  # type: bool
+                      ):
+        return self.payload._show_or_dump(dump, indent, lvl, label_lvl, first_call)
+
+    def guess_payload_class(self, payload):
+        blk = TypeBlock(payload)
+        if blk.type in NdnGuessPacket.TYPES_TO_CLS:
+            return NdnGuessPacket.TYPES_TO_CLS[blk.type]
+        else:
+            return Block
+
+# bind_layers(IP, Interest)
+bind_layers(Ether, NdnGuessPacket, type=0x8624)
