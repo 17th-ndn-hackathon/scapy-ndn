@@ -1,10 +1,10 @@
 import struct
 from datetime import datetime, timedelta
 
-from scapy.all import Field, Packet, XByteField, StrField, StrLenField, \
+from scapy.all import Field, Packet, ByteField, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, XIntField, bind_layers, ConditionalField, \
-                      RawVal, Raw, IP, Ether
+                      RawVal, Raw, IP, Ether, UDP
 
 from scapy.base_classes import BasePacket, Gen, SetGen
 
@@ -41,6 +41,16 @@ TYPES = {
           "ForwardingHint"                 : 30, # 0x1E
           "Nonce"                          : 10, # 0x0A
           "InterestLifetime"               : 12, # 0x0C
+          "MetaInfo"                       : 20, # 0x14
+          "Content"                        : 21, # 0x15
+          "SignatureInfo"                  : 22, # 0x16
+          "SignatureValue"                 : 23, # 0x17
+          "ContentType"                    : 24, # 0x18
+          "FreshnessPeriod"                : 25, # 0x19
+          "FinalBlockId"                   : 26, # 0x1A
+          "SignatureType"                  : 27, # 0x1B
+          "KeyLocator"                     : 28, # 0x1C
+          "KeyDigest"                      : 29, # 0x1D
         }
 
 TYPED_NAME_COMP = {
@@ -191,6 +201,11 @@ class NdnTypeField(Field):
                 return s, None
 
         return rest_of_pkt, val
+
+class NdnZeroLenField(ByteField):
+    def __init__(self, name="length"):
+        # type: (str, Optional[int]) -> None
+        ByteField.__init__(self, name, 0)
 
 class NameComponent(Packet):
     name = "Name Component"
@@ -359,13 +374,12 @@ class ParamsSha256(NameComponent):
                     StrFixedLenField("value", "", 32)
                   ]
 
-class NdnBasePacket(Packet):
+class BaseBlockPacket(Packet):
     def guess_payload_class(self, p):
         return conf.padding_layer
 
-class Name(Packet):
+class Name(BaseBlockPacket):
     name = "Name"
-    t = None
 
     fields_desc = [
                     NdnTypeField(TYPES['Name']),
@@ -375,18 +389,8 @@ class Name(Packet):
                                     length_from=lambda pkt : pkt.length)
                   ]
 
-    def guess_payload_class(self, p):
-        return conf.padding_layer
-
-class CanBePrefix(Packet):
-    name = "CanBePrefix"
-
-    fields_desc = [ NdnTypeField(TYPES['CanBePrefix'], "type", [TYPES["CanBePrefix"]]) ]
-
-    def guess_payload_class(self, p):
-        return conf.padding_layer
-
-class Nonce(Packet):
+#class Nonce(Packet):
+class Nonce(BaseBlockPacket):
     name = "Nonce"
 
     fields_desc = [
@@ -395,11 +399,15 @@ class Nonce(Packet):
                     XIntField("value", 2)
                   ]
 
-    def guess_payload_class(self, p):
-        return conf.padding_layer
+class InterestLifetime(BaseBlockPacket):
 
-class ForwardingHint(Packet):
-    name = "ForwardingHint"
+    fields_desc = [
+                    NdnTypeField(TYPES['InterestLifetime']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class ForwardingHint(BaseBlockPacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['ForwardingHint']),
@@ -407,30 +415,31 @@ class ForwardingHint(Packet):
                     StrFixedLenField("value", "")
                   ]
 
-class InterestLifetime(Packet):
-    name = "InterestLifetime"
+class CanBePrefix(BaseBlockPacket):
 
-    fields_desc = [
-                    NdnTypeField(TYPES['InterestLifetime']),
-                    NdnLenField(),
-                    XIntField("value", 4)
-                  ]
+    fields_desc = [ NdnTypeField(TYPES['CanBePrefix']), NdnZeroLenField() ]
 
-class MustBeFresh(Packet):
+class MustBeFresh(BaseBlockPacket):
 
-    fields_desc = [ NdnTypeField(TYPES['MustBeFresh'], "type", [TYPES["MustBeFresh"]]) ]
+    fields_desc = [ NdnTypeField(TYPES['MustBeFresh']), NdnZeroLenField() ]
 
-    def guess_payload_class(self, p):
-        return conf.padding_layer
-
-class TypeBlock(Packet):
+class TypeBlock(BaseBlockPacket):
 
     fields_desc = [ NdnTypeField("", "type") ]
 
+class NdnBasePacket(Packet):
+
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls):
+        blk = TypeBlock(remain)
+        if blk.type in types_to_cls:
+            return types_to_cls[blk.type]
+        return Raw
+
     def guess_payload_class(self, p):
         return conf.padding_layer
 
-class Interest(Packet):
+
+class Interest(NdnBasePacket):
     name = "Interest"
 
     TYPES_TO_CLS = {
@@ -451,16 +460,123 @@ class Interest(Packet):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls):
-        blk = TypeBlock(remain)
-        if blk.type in types_to_cls:
-            return types_to_cls[blk.type]
-        return Raw
+class ContentType(BaseBlockPacket):
 
-class Data(Packet):
+    CONTENT_TYPES = { "Blob": 0, "Link": 1, "Key": 2, "Nack": 3,
+                      "Manifest": 4, "PrefixAnn": 5, "KiteAck": 6 }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['ContentType']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class FreshnessPeriod(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['FreshnessPeriod']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class FinalBlockId(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['FinalBlockId']),
+                    NdnLenField(),
+                    PacketField("value", "", NameComponent)
+                  ]
+
+class Content(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES["Content"]),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class MetaInfo(NdnBasePacket):
 
     TYPES_TO_CLS = {
-                     TYPES["Name"] : Name
+                     TYPES["ContentType"] : ContentType,
+                     TYPES["FreshnessPeriod"] : FreshnessPeriod,
+                     TYPES["FinalBlockId"] : FinalBlockId
+                   }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['MetaInfo']),
+                    NdnLenField(),
+                    #StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, MetaInfo.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+class SignatureType(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['SignatureType']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class KeyDigest(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['KeyDigest']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class KeyLocator(NdnBasePacket):
+
+    TYPES_TO_CLS = {
+                     TYPES["Name"] : Name,
+                     TYPES["KeyDigest"] : KeyDigest
+                   }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['KeyLocator']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, KeyLocator.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+class SignatureInfo(NdnBasePacket):
+
+    TYPES_TO_CLS = {
+                     TYPES["SignatureType"] : SignatureType,
+                     TYPES["KeyLocator"] : KeyLocator
+                   }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['SignatureInfo']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, SignatureInfo.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+class SignatureValue(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['SignatureValue']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class Data(NdnBasePacket):
+
+    TYPES_TO_CLS = {
+                     TYPES["Name"] : Name,
+                     TYPES["MetaInfo"] : MetaInfo,
+                     TYPES["Content"] : Content,
+                     TYPES["SignatureInfo"]: SignatureInfo,
+                     TYPES["SignatureValue"]: SignatureValue
                    }
 
     fields_desc = [
@@ -471,12 +587,6 @@ class Data(Packet):
                                      : pkt.guess_ndn_packets(lst, cur, remain, Data.TYPES_TO_CLS),
                                      length_from=lambda pkt: pkt.length)
                   ]
-
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls):
-        blk = TypeBlock(remain)
-        if blk.type in types_to_cls:
-            return types_to_cls[blk.type]
-        return Raw
 
 class NdnGuessPacket(Packet):
 
@@ -505,3 +615,4 @@ class NdnGuessPacket(Packet):
 
 # bind_layers(IP, Interest)
 bind_layers(Ether, NdnGuessPacket, type=0x8624)
+bind_layers(UDP, NdnGuessPacket, sport=6363)
