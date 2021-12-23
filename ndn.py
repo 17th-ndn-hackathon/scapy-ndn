@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from scapy.all import Field, Packet, ByteField, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, XIntField, bind_layers, ConditionalField, \
-                      RawVal, Raw, IP, Ether, UDP
+                      RawVal, Raw, IP, Ether, UDP, ECDSASignature
 
 from scapy.base_classes import BasePacket, Gen, SetGen
 
@@ -41,6 +41,8 @@ TYPES = {
           "ForwardingHint"                 : 30, # 0x1E
           "Nonce"                          : 10, # 0x0A
           "InterestLifetime"               : 12, # 0x0C
+          "HopLimit"                       : 34, # 0x22
+          "ApplicationParameters"          : 36, # 0x24
           "MetaInfo"                       : 20, # 0x14
           "Content"                        : 21, # 0x15
           "SignatureInfo"                  : 22, # 0x16
@@ -438,6 +440,21 @@ class NdnBasePacket(Packet):
     def guess_payload_class(self, p):
         return conf.padding_layer
 
+class HopLimit(NdnBasePacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['HopLimit']),
+                    NdnLenField(default=1),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class ApplicationParameters(NdnBasePacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES["ApplicationParameters"]),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
 
 class Interest(NdnBasePacket):
     name = "Interest"
@@ -448,7 +465,8 @@ class Interest(NdnBasePacket):
                      TYPES["ForwardingHint"] : ForwardingHint,
                      TYPES["Nonce"] : Nonce,
                      TYPES["InterestLifetime"] : InterestLifetime,
-                     #TYPES["HopLimit"] : HopLimit
+                     TYPES["HopLimit"] : HopLimit,
+                     TYPES["ApplicationParameters"] : ApplicationParameters
                    }
 
     fields_desc = [
@@ -515,6 +533,9 @@ class MetaInfo(NdnBasePacket):
 
 class SignatureType(BaseBlockPacket):
 
+    SIG_TYPE_VALUES = { 0 : "DigestSha256", 1 : "SignatureSha256WithRsa",
+                        2 : "SignatureSha256WithEcdsa", 3 : "SignatureHmacWithSha256" }
+
     fields_desc = [
                     NdnTypeField(TYPES['SignatureType']),
                     NdnLenField(),
@@ -569,6 +590,10 @@ class SignatureValue(BaseBlockPacket):
                     StrLenField("value", "", length_from=lambda pkt: pkt.length)
                   ]
 
+class DigestSha256(Packet):
+
+    fields_desc = [ StrField("value", "")  ]
+
 class Data(NdnBasePacket):
 
     TYPES_TO_CLS = {
@@ -587,6 +612,17 @@ class Data(NdnBasePacket):
                                      : pkt.guess_ndn_packets(lst, cur, remain, Data.TYPES_TO_CLS),
                                      length_from=lambda pkt: pkt.length)
                   ]
+
+    SIG_TYPE_CLS = { 0 : DigestSha256, 1 : None, 2 : None, 3 : ECDSASignature }
+
+    @classmethod
+    def post_dissection(self, pkt):
+        try:
+            pkt_cls = Data.SIG_TYPE_CLS[ord(pkt["SignatureInfo"]["SignatureType"].value)]
+            pkt["SignatureValue"].value = pkt_cls(pkt["SignatureValue"].value)
+        except Exception as e:
+            print(e)
+            pass
 
 class NdnGuessPacket(Packet):
 
