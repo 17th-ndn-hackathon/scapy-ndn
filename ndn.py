@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from scapy.all import Field, Packet, ByteField, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
-                      PacketField, XIntField, bind_layers, ConditionalField, \
+                      PacketField, PacketLenField, XIntField, bind_layers, ConditionalField, \
                       RawVal, Raw, IP, Ether, UDP, ECDSASignature
 
 from scapy.base_classes import BasePacket, Gen, SetGen
@@ -53,6 +53,12 @@ TYPES = {
           "SignatureType"                  : 27, # 0x1B
           "KeyLocator"                     : 28, # 0x1C
           "KeyDigest"                      : 29, # 0x1D
+          "SignatureNonce"                 : 38, # 0x26
+          "SignatureTime"                  : 40, # 0x28
+          "SignatureSeqNum"                : 42, # 0x2A
+          "ValidityPeriod"                 : 253, # 0xFD
+          "NotBefore"                      : 254, # 0xFE
+          "NotAfter"                       : 255, # 0xFF
         }
 
 TYPED_NAME_COMP = {
@@ -391,7 +397,6 @@ class Name(BaseBlockPacket):
                                     length_from=lambda pkt : pkt.length)
                   ]
 
-#class Nonce(Packet):
 class Nonce(BaseBlockPacket):
     name = "Nonce"
 
@@ -414,7 +419,7 @@ class ForwardingHint(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['ForwardingHint']),
                     NdnLenField(),
-                    StrFixedLenField("value", "")
+                    PacketLenField("value", "", Name, length_from=lambda pkt: pkt.length)
                   ]
 
 class CanBePrefix(BaseBlockPacket):
@@ -524,7 +529,6 @@ class MetaInfo(NdnBasePacket):
     fields_desc = [
                     NdnTypeField(TYPES['MetaInfo']),
                     NdnLenField(),
-                    #StrLenField("value", "", length_from=lambda pkt: pkt.length)
                     PacketListField("value", [],
                                      next_cls_cb=lambda pkt, lst, cur, remain
                                      : pkt.guess_ndn_packets(lst, cur, remain, MetaInfo.TYPES_TO_CLS),
@@ -566,11 +570,71 @@ class KeyLocator(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
+class SignatureNonce(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['SignatureNonce']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class SignatureTime(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['SignatureTime']),
+                    NdnLenField(default=4),
+                    XIntField("value", "")
+                  ]
+
+class SignatureSeqNum(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['SignatureSeqNum']),
+                    NdnLenField(default=4),
+                    XIntField("value", "")
+                  ]
+
+class NotBefore(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['NotBefore']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class NotAfter(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES['NotAfter']),
+                    NdnLenField(),
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class ValidityPeriod(NdnBasePacket):
+
+    TYPES_TO_CLS = {
+                     TYPES["NotBefore"] : NotBefore,
+                     TYPES["NotAfter"] : NotAfter
+                   }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['ValidityPeriod']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, ValidityPeriod.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
 class SignatureInfo(NdnBasePacket):
 
     TYPES_TO_CLS = {
                      TYPES["SignatureType"] : SignatureType,
-                     TYPES["KeyLocator"] : KeyLocator
+                     TYPES["KeyLocator"] : KeyLocator,
+                     TYPES["ValidityPeriod"] : ValidityPeriod,
+                     TYPES["SignatureNonce"] : SignatureNonce,
+                     TYPES["SignatureTime"] : SignatureTime,
+                     TYPES["SignatureSeqNum"] : SignatureSeqNum
                    }
 
     fields_desc = [
@@ -621,8 +685,38 @@ class Data(NdnBasePacket):
             pkt_cls = Data.SIG_TYPE_CLS[ord(pkt["SignatureInfo"]["SignatureType"].value)]
             pkt["SignatureValue"].value = pkt_cls(pkt["SignatureValue"].value)
         except Exception as e:
-            print(e)
+            #print(e)
             pass
+
+class Certificate(Data):
+    name = "Certificate"
+
+class LinkContent(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(TYPES["Content"]),
+                    NdnLenField(),
+                    PacketLenField("value", "", Name, length_from=lambda pkt: pkt.length)
+                  ]
+
+class LinkObject(Data):
+
+    TYPES_TO_CLS = {
+                     TYPES["Name"] : Name,
+                     TYPES["MetaInfo"] : MetaInfo,
+                     TYPES["Content"] : LinkContent,
+                     TYPES["SignatureInfo"]: SignatureInfo,
+                     TYPES["SignatureValue"]: SignatureValue
+                   }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['Data']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, LinkObject.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
 
 class NdnGuessPacket(Packet):
 
