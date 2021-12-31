@@ -87,6 +87,67 @@ COMP_TYPES = {
           "seq"          : TYPED_NAME_COMP["SequenceNumNameComponent"],
         }
 
+class NonNegativeIntField(Field):
+    __slots__ = ["length_from", "enum"]
+
+    def __init__(self, name, default, length_from=None, enum=None):
+        Field.__init__(self, name, default)
+        self.length_from = length_from
+        self.enum = enum
+
+    def i2len(self, pkt, x):
+        if not isinstance(x, int) or x < 0:
+            x = 0
+
+        if x <= 255:
+            l = 1
+        elif x < 65535:
+            l = 2
+        elif x < 4294967295:
+            l = 4
+        else:
+            l = 8
+        self.sz = l
+        return l
+
+    def addfield(self, pkt, s, val):
+        x = self.i2m(pkt, val)
+        if not x:
+            return s
+
+        if x < 253:
+            return s + struct.pack(">B", x)
+        elif x < 65535:
+            return s + struct.pack(">H", x)
+        elif x < 4294967296:
+            return s + struct.pack(">L", x)
+        else:
+            return s + struct.pack(">Q", x)
+
+    def getfield(self, pkt, s):
+        if not s:
+            return None, None
+
+        len_pkt = (self.length_from or (lambda x: 0))(pkt)
+        self.sz = len_pkt
+
+        if self.sz == 1:
+            val = self.m2i(pkt, struct.unpack(">B", s[:len_pkt])[0])
+        elif self.sz == 2:
+            val = self.m2i(pkt, struct.unpack(">H", s[:len_pkt])[0])
+        elif self.sz == 4:
+            val = self.m2i(pkt, struct.unpack(">L", s[:len_pkt])[0])
+        else:
+            val = self.m2i(pkt, struct.unpack(">Q", s[:len_pkt])[0])
+
+        return s[len_pkt:], val
+
+    def i2repr(self, pkt, w):
+        if self.enum and w in self.enum:
+            return "{} [{}]".format(w, self.enum[w])
+        else:
+            return w
+
 class NdnLenField(Field):
 
     def __init__(self, default=None, name="length", fmt="!H"):  # noqa: E501
@@ -100,7 +161,7 @@ class NdnLenField(Field):
             for field in pkt.fields_desc:
                 if field.name != "type" and field.name != "length":
                     fld, fval = pkt.getfield_and_val(field.name)
-                    #print("fval: ", fval)
+                    #print("fld, fval: ", fld, fval)
                     if fval is None:
                         continue
                     if x is None:
@@ -149,7 +210,6 @@ class NdnTypeField(Field):
         # If valid_types is None then all types expected, for example in NameComponent packet
         self.valid_types = valid_types
         Field.__init__(self, name, default, fmt)
-        #NdnLenField.__init__(self, default, name, default, fmt)
 
     def m2i(self, pkt, x):
         #print("NdnTypeField m2i: ", x)
@@ -223,10 +283,6 @@ class NameComponent(Packet):
                     # Don't need to give it "value" field because NdnLenField computes length
                     # over all the fields except itself and type field above
                     NdnLenField(),
-                    # Packet's length field is determined by NdnLenField above and used by value below
-                    # Otherwise packet boundaries are not determined correctly and padding will be
-                    # merged into the value field
-                    # (TODO: How to/Need to do this for Interest field?)
                     StrLenField("value", "", length_from=lambda pkt: pkt.length)
                   ]
 
@@ -411,7 +467,7 @@ class InterestLifetime(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['InterestLifetime']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
 class ForwardingHint(BaseBlockPacket):
@@ -450,7 +506,7 @@ class HopLimit(NdnBasePacket):
     fields_desc = [
                     NdnTypeField(TYPES['HopLimit']),
                     NdnLenField(default=1),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    ByteField("value", 0)
                   ]
 
 class ApplicationParameters(NdnBasePacket):
@@ -485,13 +541,13 @@ class Interest(NdnBasePacket):
 
 class ContentType(BaseBlockPacket):
 
-    CONTENT_TYPES = { "Blob": 0, "Link": 1, "Key": 2, "Nack": 3,
-                      "Manifest": 4, "PrefixAnn": 5, "KiteAck": 6 }
+    CONTENT_TYPES = { 0: "Blob", 1: "Link", 2: "Key", 3: "Nack",
+                      4: "Manifest", 5: "PrefixAnn", 6: "KiteAck" }
 
     fields_desc = [
                     NdnTypeField(TYPES['ContentType']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length, enum=CONTENT_TYPES)
                   ]
 
 class FreshnessPeriod(BaseBlockPacket):
@@ -499,7 +555,7 @@ class FreshnessPeriod(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['FreshnessPeriod']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
 class FinalBlockId(BaseBlockPacket):
@@ -507,7 +563,7 @@ class FinalBlockId(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['FinalBlockId']),
                     NdnLenField(),
-                    PacketField("value", "", NameComponent)
+                    PacketLenField("value", "", NameComponent, length_from=lambda pkt: pkt.length)
                   ]
 
 class Content(BaseBlockPacket):
@@ -583,7 +639,7 @@ class SignatureTime(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['SignatureTime']),
                     NdnLenField(default=4),
-                    XIntField("value", "")
+                    NonNegativeIntField("value", 0)
                   ]
 
 class SignatureSeqNum(BaseBlockPacket):
@@ -591,7 +647,7 @@ class SignatureSeqNum(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['SignatureSeqNum']),
                     NdnLenField(default=4),
-                    XIntField("value", "")
+                    NonNegativeIntField("value", 0)
                   ]
 
 class NotBefore(BaseBlockPacket):
