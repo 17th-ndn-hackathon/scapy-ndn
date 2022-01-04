@@ -65,7 +65,7 @@ TYPED_NAME_COMP = {
           "SegmentNameComponent"    : 50, # 0x32
           "ByteOffsetNameComponent" : 52, # 0x34
           "VersionNameComponent"    : 54, # 0x36
-          "TimestampNameComponent"  : 56, # 0x28
+          "TimestampNameComponent"  : 56, # 0x38
           "SequenceNumNameComponent": 58, # 0x3A
         }
 
@@ -429,6 +429,24 @@ class NameComponent(Packet):
 class Block(NameComponent):
     name = "Block"
 
+class VersionNameComponent(NameComponent):
+    name = "Version Name Component"
+
+    fields_desc = [
+                    NdnTypeField(TYPED_NAME_COMP['VersionNameComponent']),
+                    NdnLenField(),
+                    NonNegativeIntField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
+class SegmentNameComponent(NameComponent):
+    name = "Segment Name Component"
+
+    fields_desc = [
+                    NdnTypeField(TYPED_NAME_COMP['SegmentNameComponent']),
+                    NdnLenField(),
+                    NonNegativeIntField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
+
 # Following two classes given for convenience with length field set to 32:
 class Sha256Digest(NameComponent):
     name = "ImplicitSha256DigestComponent"
@@ -462,7 +480,9 @@ class NdnBasePacket(Packet):
 class Name(NdnBasePacket):
     name = "Name"
 
-    TYPES_TO_CLS = { TYPES["GenericNameComponent"] : NameComponent }
+    TYPES_TO_CLS = { TYPES["GenericNameComponent"] : NameComponent,
+                     TYPED_NAME_COMP['VersionNameComponent']: VersionNameComponent,
+                     TYPED_NAME_COMP['SegmentNameComponent']: SegmentNameComponent }
 
     fields_desc = [
                     NdnTypeField(TYPES['Name']),
@@ -476,7 +496,10 @@ class Name(NdnBasePacket):
     def _get_name(self):
         name_str = "/"
         for f in self.value:
-            name_str += f.value.decode("unicode_escape") + "/"
+            if isinstance(f.value, bytes):
+                name_str += f.value.decode("unicode_escape") + "/"
+            else:
+                name_str += "{}/".format(f.value)
         return name_str
 
     def get_name(self):
@@ -617,12 +640,19 @@ class FreshnessPeriod(BaseBlockPacket):
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
-class FinalBlockId(BaseBlockPacket):
+class FinalBlockId(NdnBasePacket):
+
+    TYPES_TO_CLS = { TYPES["GenericNameComponent"] : NameComponent,
+                     TYPED_NAME_COMP['VersionNameComponent']: VersionNameComponent,
+                     TYPED_NAME_COMP['SegmentNameComponent']: SegmentNameComponent }
 
     fields_desc = [
                     NdnTypeField(TYPES['FinalBlockId']),
                     NdnLenField(),
-                    PacketLenField("value", "", NameComponent, length_from=lambda pkt: pkt.length)
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, FinalBlockId.TYPES_TO_CLS, NameComponent),
+                                     length_from=lambda pkt: pkt.length)
                   ]
 
 class Content(NdnBasePacket):
@@ -649,7 +679,7 @@ class Content(NdnBasePacket):
                     if n in pkt_name:
                         return names_to_cls[n]
             ul = ul.underlayer
-        return Raw
+        return Block
 
 class MetaInfo(NdnBasePacket):
 
@@ -676,7 +706,7 @@ class SignatureType(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['SignatureType']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    NonNegativeIntField("value", "", length_from=lambda pkt: pkt.length, enum=SIG_TYPE_VALUES)
                   ]
 
 class KeyDigest(BaseBlockPacket):
@@ -867,10 +897,10 @@ class Data(NdnBasePacket):
     @classmethod
     def post_dissection(self, pkt):
         try:
-            pkt_cls = Data.SIG_TYPE_CLS[ord(pkt["SignatureInfo"]["SignatureType"].value)]
+            pkt_cls = Data.SIG_TYPE_CLS[pkt["SignatureInfo"]["SignatureType"].value]
             pkt["SignatureValue"].value = pkt_cls(pkt["SignatureValue"].value)
         except Exception as e:
-            #print(e)
+            print(e)
             pass
 
 class Certificate(Data):
