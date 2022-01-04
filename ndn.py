@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from scapy.all import Field, Packet, ByteField, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, PacketLenField, XIntField, bind_layers, ConditionalField, \
-                      RawVal, Raw, IP, Ether, UDP, ECDSASignature
+                      RawVal, Raw, IP, Ether, UDP, ECDSASignature, raw
 
 from scapy.base_classes import BasePacket, Gen, SetGen
 
@@ -62,11 +62,11 @@ TYPES = {
         }
 
 TYPED_NAME_COMP = {
-          "SegmentNameComponent"    : 33, # 0x21
-          "ByteOffsetNameComponent" : 34, # 0x22
-          "VersionNameComponent"    : 35, # 0x23
-          "TimestampNameComponent"  : 36, # 0x24
-          "SequenceNumNameComponent": 37, # 0x25
+          "SegmentNameComponent"    : 50, # 0x32
+          "ByteOffsetNameComponent" : 52, # 0x34
+          "VersionNameComponent"    : 54, # 0x36
+          "TimestampNameComponent"  : 56, # 0x28
+          "SequenceNumNameComponent": 58, # 0x3A
         }
 
 NUM_TO_TYPES = {v: k for k, v in TYPES.items()}
@@ -148,6 +148,7 @@ class NonNegativeIntField(Field):
         else:
             return w
 
+# Maybe inherit from FieldLenField and set value as the field we need the length for
 class NdnLenField(Field):
 
     def __init__(self, default=None, name="length", fmt="!H"):  # noqa: E501
@@ -172,6 +173,7 @@ class NdnLenField(Field):
 
     def addfield(self, pkt, s, val):
         x = self.i2m(pkt, val)
+        #print(x)
         if not x:
             return s
 
@@ -193,7 +195,8 @@ class NdnLenField(Field):
             return None, None
 
         # Check the first octet
-        x = ord(s[:self.sz - 1])
+        #x = ord(s[:self.sz - 1])
+        x = ord(s[:1])
         if x < 253:
             return s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
         elif x == 253:
@@ -253,7 +256,8 @@ class NdnTypeField(Field):
 
         #print("NdnTypeField getfield s: ", s, type(s))
         # Check the first octet
-        x = ord(s[:self.sz - 1])
+        #x = ord(s[:self.sz - 1])
+        x = ord(s[:1])
 
         if x < 253:
             rest_of_pkt, val = s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
@@ -275,13 +279,19 @@ class NdnZeroLenField(ByteField):
         # type: (str, Optional[int]) -> None
         ByteField.__init__(self, name, 0)
 
+class BaseBlockPacket(Packet):
+    def guess_payload_class(self, p):
+        return conf.padding_layer
+
+class TypeBlock(BaseBlockPacket):
+
+    fields_desc = [ NdnTypeField("", "type") ]
+
 class NameComponent(Packet):
     name = "Name Component"
 
     fields_desc = [
                     NdnTypeField(TYPES['GenericNameComponent']),
-                    # Don't need to give it "value" field because NdnLenField computes length
-                    # over all the fields except itself and type field above
                     NdnLenField(),
                     StrLenField("value", "", length_from=lambda pkt: pkt.length)
                   ]
@@ -438,20 +448,39 @@ class ParamsSha256(NameComponent):
                     StrFixedLenField("value", "", 32)
                   ]
 
-class BaseBlockPacket(Packet):
+class NdnBasePacket(Packet):
+
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+        blk = TypeBlock(remain)
+        if blk.type in types_to_cls:
+            return types_to_cls[blk.type]
+        return default
+
     def guess_payload_class(self, p):
         return conf.padding_layer
 
-class Name(BaseBlockPacket):
+class Name(NdnBasePacket):
     name = "Name"
+
+    TYPES_TO_CLS = { TYPES["GenericNameComponent"] : NameComponent }
 
     fields_desc = [
                     NdnTypeField(TYPES['Name']),
                     NdnLenField(),
-                    # Check only for valid NameComponents when reading?
-                    PacketListField("value", NameComponent(), NameComponent,
-                                    length_from=lambda pkt : pkt.length)
-                  ]
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, Name.TYPES_TO_CLS, NameComponent),
+                                     length_from=lambda pkt: pkt.length)
+              ]
+
+    def _get_name(self):
+        name_str = "/"
+        for f in self.value:
+            name_str += f.value.decode("unicode_escape") + "/"
+        return name_str
+
+    def get_name(self):
+        return self.__class__(raw(self))._get_name()
 
 class Nonce(BaseBlockPacket):
     name = "Nonce"
@@ -486,20 +515,50 @@ class MustBeFresh(BaseBlockPacket):
 
     fields_desc = [ NdnTypeField(TYPES['MustBeFresh']), NdnZeroLenField() ]
 
-class TypeBlock(BaseBlockPacket):
+##################################################
+class FaceId(BaseBlockPacket):
 
-    fields_desc = [ NdnTypeField("", "type") ]
+    fields_desc = [
+                    NdnTypeField(105),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
 
-class NdnBasePacket(Packet):
+class Cost(BaseBlockPacket):
 
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls):
-        blk = TypeBlock(remain)
-        if blk.type in types_to_cls:
-            return types_to_cls[blk.type]
-        return Raw
+    fields_desc = [
+                    NdnTypeField(106),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
 
-    def guess_payload_class(self, p):
-        return conf.padding_layer
+class NextHopRecord(NdnBasePacket):
+
+    TYPES_TO_CLS = { 105 : FaceId, 106 : Cost }
+
+    fields_desc = [
+                    NdnTypeField(129),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, NextHopRecord.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+class NfdFib(NdnBasePacket):
+
+    TYPES_TO_CLS = { TYPES["Name"] : Name, 129 : NextHopRecord }
+
+    fields_desc = [
+                    NdnTypeField(128),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, NfdFib.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+###################################################
 
 class HopLimit(NdnBasePacket):
 
@@ -566,13 +625,31 @@ class FinalBlockId(BaseBlockPacket):
                     PacketLenField("value", "", NameComponent, length_from=lambda pkt: pkt.length)
                   ]
 
-class Content(BaseBlockPacket):
+class Content(NdnBasePacket):
+
+    NAMES_TO_CLS = { "/localhost/nfd/fib/list" : NfdFib }
 
     fields_desc = [
                     NdnTypeField(TYPES["Content"]),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    # StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_content_by_name(pkt, lst, cur, remain, Content.NAMES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
                   ]
+
+    def guess_content_by_name(self, pkt, lst, cur, remain, names_to_cls):
+        # Underlayer possible here due to custom PacketListField used in Data class
+        ul = pkt.underlayer
+        while ul:
+            if isinstance(ul, Name):
+                pkt_name = ul.get_name()
+                for n in names_to_cls:
+                    if n in pkt_name:
+                        return names_to_cls[n]
+            ul = ul.underlayer
+        return Raw
 
 class MetaInfo(NdnBasePacket):
 
@@ -714,6 +791,58 @@ class DigestSha256(Packet):
 
     fields_desc = [ StrField("value", "")  ]
 
+class CustomPacketListField(PacketListField):
+    def getfield(self, pkt, s):
+        # print("====================================")
+        # type: (Packet, bytes) -> Tuple[bytes, List[BasePacket]]
+        c = len_pkt = cls = None
+        if self.length_from is not None:
+            len_pkt = self.length_from(pkt)
+        elif self.count_from is not None:
+            c = self.count_from(pkt)
+        if self.next_cls_cb is not None:
+            cls = self.next_cls_cb(pkt, [], None, s)
+            c = 1
+            if cls is None:
+                c = 0
+        prev=None
+
+        lst = []  # type: List[BasePacket]
+        ret = b""
+        remain = s
+        if len_pkt is not None:
+            remain, ret = s[:len_pkt], s[len_pkt:]
+        while remain:
+            if c is not None:
+                if c <= 0:
+                    break
+                c -= 1
+            try:
+                if cls is not None:
+                    p = cls(remain, _underlayer=prev)
+                    prev = p
+                else:
+                    p = self.m2i(pkt, remain)
+            except Exception:
+                if conf.debug_dissector:
+                    raise
+                p = conf.raw_layer(load=remain)
+                remain = b""
+            else:
+                if conf.padding_layer in p:
+                    pad = p[conf.padding_layer]
+                    remain = pad.load
+                    del(pad.underlayer.payload)
+                    if self.next_cls_cb is not None:
+                        cls = self.next_cls_cb(pkt, lst, p, remain)
+                        if cls is not None:
+                            c = 0 if c is None else c
+                            c += 1
+                else:
+                    remain = b""
+            lst.append(p)
+        return remain + ret, lst
+
 class Data(NdnBasePacket):
 
     TYPES_TO_CLS = {
@@ -727,7 +856,7 @@ class Data(NdnBasePacket):
     fields_desc = [
                     NdnTypeField(TYPES['Data']),
                     NdnLenField(),
-                    PacketListField("value", [],
+                    CustomPacketListField("value", [],
                                      next_cls_cb=lambda pkt, lst, cur, remain
                                      : pkt.guess_ndn_packets(lst, cur, remain, Data.TYPES_TO_CLS),
                                      length_from=lambda pkt: pkt.length)
