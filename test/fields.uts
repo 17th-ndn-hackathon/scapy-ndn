@@ -9,7 +9,9 @@
 #import sys
 #print(sys.path)
 
-from ndn import NdnLenField, NameComponent, Sha256Digest, TYPES, COMP_TYPES, Interest, Name, Nonce
+from ndn import NdnLenField, NameComponent, Sha256Digest, TYPES, COMP_TYPES, \
+                Interest, Name, Nonce, DoubleNameComponent, \
+                NonNegIntNameComponent, VersionNameComponent
 
 # Empty
 assert NdnLenField().addfield(Raw(""), b"\x08", None) == b"\x08"
@@ -69,35 +71,37 @@ assert raw(nc.payload) == b"\x00\x00"
 # Non negative integer test
 for item in [ (20, 1, b"\x14"), (4500, 2, b"\x11\x94"), (70000, 4, b"\x00\x01\x11\x70"),
               (4294967296, 8, b"\x00\x00\x00\x01\x00\x00\x00\x00") ]:
-    nc = NameComponent(value=item[0])
+    nc = NonNegIntNameComponent(raw(NonNegIntNameComponent(value=item[0])))
+    #print(nc.value)
+    #nc.show2()
     assert nc.type == TYPES['GenericNameComponent']
-    assert nc.to_number() == item[0]
     assert nc.length == item[1]
-    assert nc.value == item[2]
+    assert nc.value == item[0]
 
 # Similar to v=20
-nc = NameComponent(type="v", value=20)
+nc = VersionNameComponent(value=20)
 rnc = raw(nc)
-bnc = NameComponent(rnc)
+bnc = VersionNameComponent(rnc)
 assert bnc.type == COMP_TYPES["v"]
-assert rnc == b"\x23\x01\x14"
+assert rnc == b"\x36\x01\x14"
 
 nc = Sha256Digest(value="28bad4b5275bd392dbb670c75cf0b66f13f7942b21e80f55c0e86b374753a548")
 rnc = raw(nc)
 bnc = Sha256Digest(rnc)
 assert bnc.type == COMP_TYPES["sha256digest"]
-bnc.show2()
-hexdump(bnc)
 
-#= Interest Tests
+= Double Name Component Tests
 
-#n = Name(value=NameComponent(value="test1") / NameComponent(value="test2"))
-#i = Interest(n, Nonce=Nonce(value=32))
-#i.show2()
+nc = DoubleNameComponent(value=21.359888375)
+rnc = raw(nc)
+bnc = DoubleNameComponent(rnc)
+assert bnc.type == TYPES["GenericNameComponent"]
+assert bnc.length == 8
+assert bnc.value == 21.359888375
+assert rnc == b"\x08\x08\x40\x35\x5C\x21\xA5\x00\xD5\xE9"
 
-#i = Interest(b"\x05\x14\x07\x0E\x08\x05\x74\x65\x73\x74\x31\x08\x05\x74\x65\x73\x74\x32\x21\x12")
-#i.show2()
+nc = DoubleNameComponent(b"\x08\x08\x40\x35\x5C\x21\xA5\x00\xD5\xE9\x00")
+assert "Padding" in nc
 
-#i = Interest(b"\x05\x14\x07\x0E\x08\x05\x74\x65\x73\x74\x31\x08\x05\x74\x65\x73\x74\x32\x12\x21")
-#i.show2()
-#hexdump(i)
+nc = NameComponent(rnc)
+assert nc.to_double() == 21.359888375

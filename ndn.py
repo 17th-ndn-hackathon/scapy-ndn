@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from scapy.all import Field, Packet, ByteField, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, PacketLenField, XIntField, bind_layers, ConditionalField, \
-                      RawVal, Raw, IP, Ether, UDP, ECDSASignature, raw
+                      RawVal, Raw, IP, Ether, UDP, ECDSASignature, raw, IEEEDoubleField
 
 from scapy.base_classes import BasePacket, Gen, SetGen
 
@@ -108,6 +108,7 @@ class NonNegativeIntField(Field):
         else:
             l = 8
         self.sz = l
+
         return l
 
     def addfield(self, pkt, s, val):
@@ -137,7 +138,7 @@ class NonNegativeIntField(Field):
             val = self.m2i(pkt, struct.unpack(">H", s[:len_pkt])[0])
         elif self.sz == 4:
             val = self.m2i(pkt, struct.unpack(">L", s[:len_pkt])[0])
-        else:
+        elif self.sz == 8:
             val = self.m2i(pkt, struct.unpack(">Q", s[:len_pkt])[0])
 
         return s[len_pkt:], val
@@ -148,7 +149,6 @@ class NonNegativeIntField(Field):
         else:
             return w
 
-# Maybe inherit from FieldLenField and set value as the field we need the length for
 class NdnLenField(Field):
 
     def __init__(self, default=None, name="length", fmt="!H"):  # noqa: E501
@@ -195,7 +195,6 @@ class NdnLenField(Field):
             return None, None
 
         # Check the first octet
-        #x = ord(s[:self.sz - 1])
         x = ord(s[:1])
         if x < 253:
             return s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
@@ -227,7 +226,6 @@ class NdnTypeField(Field):
             return TYPES[self.name]
 
         if x is None:
-            #print("return empty from ndntypefield")
             return b""
         return x
 
@@ -254,9 +252,6 @@ class NdnTypeField(Field):
         if not s:
             return None, None
 
-        #print("NdnTypeField getfield s: ", s, type(s))
-        # Check the first octet
-        #x = ord(s[:self.sz - 1])
         x = ord(s[:1])
 
         if x < 253:
@@ -295,25 +290,6 @@ class NameComponent(Packet):
                     NdnLenField(),
                     StrLenField("value", "", length_from=lambda pkt: pkt.length)
                   ]
-
-    def __init__(self,
-                 _pkt=b"",  # type: bytes
-                 post_transform=None,  # type: Any
-                 _internal=0,  # type: int
-                 _underlayer=None,  # type: Optional[Packet]
-                 _unescape=False,
-                 **fields  # type: Any
-                ):
-
-        if "value" in fields:
-            if isinstance(fields["value"], str) and _unescape:
-                fields["value"] = NameComponent._unescape(fields["value"])
-            elif isinstance(fields["value"], int):
-                fields["length"], fields["value"] = NameComponent._get_num_len_value(fields["value"])
-            elif isinstance(fields["value"], float):
-                fields["value"] = NameComponent.from_double(fields["value"])
-
-        Packet.__init__(self, _pkt, post_transform, _internal, _underlayer, **fields)
 
     def guess_payload_class(self, p):
         return conf.padding_layer
@@ -354,24 +330,6 @@ class NameComponent(Packet):
     def from_escaped_string(input_str):
         return NameComponent(value=input_str)
 
-    @staticmethod
-    def _get_num_len_value(x):
-        if x < 0 or not isinstance(x, int):
-            x = 0
-
-        if x <= 255:
-            return 1, struct.pack(">B", x)
-        elif x < 65535:
-            return 2, struct.pack(">H", x)
-        elif x < 4294967295:
-            return 4, struct.pack(">L", x)
-        else:
-            return 8, struct.pack(">Q", x)
-
-    @staticmethod
-    def from_number(x, comp_type=TYPES['GenericNameComponent']):
-        return NameComponent(type=comp_type, value=x)
-
     def to_number(self):
         fld, val = self.getfield_and_val("value")
         if self.length == 1:
@@ -385,26 +343,9 @@ class NameComponent(Packet):
         else:
             return -1
 
-    @staticmethod
-    def from_double(x):
-        return struct.pack(">d", x)
-
     def to_double(self):
         fld, val = self.getfield_and_val("value")
         return struct.unpack(">d", val)[0]
-
-    @staticmethod
-    def from_number_with_marker(marker, number):
-        l, v = NameComponent._get_num_len_value(number)
-        v = struct.pack(">B", marker) + v
-        return NameComponent(length=l + 1, value=v)
-
-    @staticmethod
-    def from_version(x):
-        return NameComponent(type="v", value=x)
-
-    def to_version(self):
-        return self.to_number()
 
     @staticmethod
     def from_timestamp(timepoint):
@@ -413,18 +354,6 @@ class NameComponent(Packet):
 
     def to_timestamp(self):
         return datetime(1970, 1, 1) + timedelta(microseconds=self.to_number())
-
-    @staticmethod
-    def from_sequence_number():
-        pass
-
-    @staticmethod
-    def from_implicit_sha256_digest():
-        pass
-
-    @staticmethod
-    def from_parameters_sha256_digest():
-        pass
 
 class Block(NameComponent):
     name = "Block"
@@ -435,7 +364,7 @@ class VersionNameComponent(NameComponent):
     fields_desc = [
                     NdnTypeField(TYPED_NAME_COMP['VersionNameComponent']),
                     NdnLenField(),
-                    NonNegativeIntField("value", "", length_from=lambda pkt: pkt.length)
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
 class SegmentNameComponent(NameComponent):
@@ -444,7 +373,25 @@ class SegmentNameComponent(NameComponent):
     fields_desc = [
                     NdnTypeField(TYPED_NAME_COMP['SegmentNameComponent']),
                     NdnLenField(),
-                    NonNegativeIntField("value", "", length_from=lambda pkt: pkt.length)
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NonNegIntNameComponent(NameComponent):
+    name = "Non-Neative Integer Name Component"
+
+    fields_desc = [
+                    NdnTypeField(TYPES['GenericNameComponent']),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class DoubleNameComponent(NameComponent):
+    name = "Double Name Component"
+
+    fields_desc = [
+                    NdnTypeField(TYPES['GenericNameComponent']),
+                    NdnLenField(),
+                    IEEEDoubleField("value", 0)
                   ]
 
 # Following two classes given for convenience with length field set to 32:
@@ -497,6 +444,7 @@ class Name(NdnBasePacket):
         name_str = "/"
         for f in self.value:
             if isinstance(f.value, bytes):
+                # name_str += NameComponent._unescape(f.value.decode("unicode_escape")) + "/"
                 name_str += f.value.decode("unicode_escape") + "/"
             else:
                 name_str += "{}/".format(f.value)
@@ -679,7 +627,7 @@ class Content(NdnBasePacket):
                     if n in pkt_name:
                         return names_to_cls[n]
             ul = ul.underlayer
-        return Block
+        return Raw
 
 class MetaInfo(NdnBasePacket):
 
@@ -701,7 +649,7 @@ class MetaInfo(NdnBasePacket):
 class SignatureType(BaseBlockPacket):
 
     SIG_TYPE_VALUES = { 0 : "DigestSha256", 1 : "SignatureSha256WithRsa",
-                        2 : "SignatureSha256WithEcdsa", 3 : "SignatureHmacWithSha256" }
+                        3 : "SignatureSha256WithEcdsa", 4 : "SignatureHmacWithSha256" }
 
     fields_desc = [
                     NdnTypeField(TYPES['SignatureType']),
@@ -900,7 +848,7 @@ class Data(NdnBasePacket):
             pkt_cls = Data.SIG_TYPE_CLS[pkt["SignatureInfo"]["SignatureType"].value]
             pkt["SignatureValue"].value = pkt_cls(pkt["SignatureValue"].value)
         except Exception as e:
-            print(e)
+            # print(e)
             pass
 
 class Certificate(Data):
