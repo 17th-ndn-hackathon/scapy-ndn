@@ -1,3 +1,4 @@
+# -*- mode: python -*-
 % Regression tests for Scapy NDN regarding NdnLenField and NdnTypeField
 
 ############

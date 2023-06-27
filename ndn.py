@@ -1,10 +1,11 @@
+# -*- mode: python -*-
 import struct
 from datetime import datetime, timedelta
 
 from scapy.all import Field, Packet, ByteField, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, PacketLenField, XIntField, bind_layers, ConditionalField, \
-                      RawVal, Raw, IP, Ether, UDP, ECDSASignature, raw, IEEEDoubleField
+                      RawVal, Raw, IP, Ether, UDP, TCP, ECDSASignature, raw, IEEEDoubleField
 
 from scapy.base_classes import BasePacket, Gen, SetGen
 
@@ -15,10 +16,10 @@ DECODING_CONVENTION = CONVENTIONS["EITHER"]
 
 MARKERS = {
             "SEGMENT_MARKER"         : 0x00,
-            "SEGMENT_OFFSET_MARKER"  : 0xFB,
-            "VERSION_MARKER"         : 0xFD,
-            "TIMESTAMP_MARKER"       : 0xFC,
-            "SEQUENCE_NUMBER_MARKER" : 0xFE,
+            "SEGMENT_OFFSET_MARKER"  : 0xFB, # 251
+            "TIMESTAMP_MARKER"       : 0xFC, # 252
+            "VERSION_MARKER"         : 0xFD, # 253
+            "SEQUENCE_NUMBER_MARKER" : 0xFE, # 254
           }
 
 MARKER_TYPES = {
@@ -149,6 +150,26 @@ class NonNegativeIntField(Field):
         else:
             return w
 
+class TimestampIntField(NonNegativeIntField):
+
+    def addfield(self, pkt, s, val):
+        if isinstance(val, datetime):
+            val = int((val - datetime(1970, 1, 1)).total_seconds() * 1000000)
+            return super(TimestampIntField, self).addfield(pkt, s, val)
+        return s
+
+    def i2len(self, pkt, x):
+        if isinstance(x, datetime):
+            x = int((x - datetime(1970, 1, 1)).total_seconds() * 1000000)
+            return super(TimestampIntField, self).i2len(pkt, x)
+        return 0
+
+    def i2repr(self, pkt, x):
+        if x is None:
+            return ""
+        return "{} [{}]".format(x, datetime(1970, 1, 1) + timedelta(microseconds=x))
+        return x
+
 class NdnLenField(Field):
 
     def __init__(self, default=None, name="length", fmt="!H"):  # noqa: E501
@@ -169,6 +190,10 @@ class NdnLenField(Field):
                         x = fld.i2len(pkt, fval)
                     else:
                         x += fld.i2len(pkt, fval)
+
+        if x is None:
+            x = 0
+
         return x
 
     def addfield(self, pkt, s, val):
@@ -347,14 +372,6 @@ class NameComponent(Packet):
         fld, val = self.getfield_and_val("value")
         return struct.unpack(">d", val)[0]
 
-    @staticmethod
-    def from_timestamp(timepoint):
-        microseconds = int((timepoint - datetime(1970, 1, 1)).total_seconds() * 1000000)
-        return NameComponent(type="t", value=microseconds)
-
-    def to_timestamp(self):
-        return datetime(1970, 1, 1) + timedelta(microseconds=self.to_number())
-
 class Block(NameComponent):
     name = "Block"
 
@@ -374,6 +391,16 @@ class SegmentNameComponent(NameComponent):
                     NdnTypeField(TYPED_NAME_COMP['SegmentNameComponent']),
                     NdnLenField(),
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class TimestampNameComponent(NameComponent):
+
+    name = "Timestamp Name Component"
+
+    fields_desc = [
+                    NdnTypeField(TYPED_NAME_COMP['TimestampNameComponent']),
+                    NdnLenField(),
+                    TimestampIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
 class NonNegIntNameComponent(NameComponent):
@@ -486,51 +513,6 @@ class MustBeFresh(BaseBlockPacket):
 
     fields_desc = [ NdnTypeField(TYPES['MustBeFresh']), NdnZeroLenField() ]
 
-##################################################
-class FaceId(BaseBlockPacket):
-
-    fields_desc = [
-                    NdnTypeField(105),
-                    NdnLenField(),
-                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class Cost(BaseBlockPacket):
-
-    fields_desc = [
-                    NdnTypeField(106),
-                    NdnLenField(),
-                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class NextHopRecord(NdnBasePacket):
-
-    TYPES_TO_CLS = { 105 : FaceId, 106 : Cost }
-
-    fields_desc = [
-                    NdnTypeField(129),
-                    NdnLenField(),
-                    PacketListField("value", [],
-                                     next_cls_cb=lambda pkt, lst, cur, remain
-                                     : pkt.guess_ndn_packets(lst, cur, remain, NextHopRecord.TYPES_TO_CLS),
-                                     length_from=lambda pkt: pkt.length)
-                  ]
-
-class NfdFib(NdnBasePacket):
-
-    TYPES_TO_CLS = { TYPES["Name"] : Name, 129 : NextHopRecord }
-
-    fields_desc = [
-                    NdnTypeField(128),
-                    NdnLenField(),
-                    PacketListField("value", [],
-                                     next_cls_cb=lambda pkt, lst, cur, remain
-                                     : pkt.guess_ndn_packets(lst, cur, remain, NfdFib.TYPES_TO_CLS),
-                                     length_from=lambda pkt: pkt.length)
-                  ]
-
-###################################################
-
 class HopLimit(NdnBasePacket):
 
     fields_desc = [
@@ -605,7 +587,7 @@ class FinalBlockId(NdnBasePacket):
 
 class Content(NdnBasePacket):
 
-    NAMES_TO_CLS = { "/localhost/nfd/fib/list" : NfdFib }
+    NAMES_TO_CLS = {}
 
     fields_desc = [
                     NdnTypeField(TYPES["Content"]),
@@ -906,6 +888,7 @@ class NdnGuessPacket(Packet):
         else:
             return Block
 
-# bind_layers(IP, Interest)
 bind_layers(Ether, NdnGuessPacket, type=0x8624)
 bind_layers(UDP, NdnGuessPacket, sport=6363)
+bind_layers(UDP, NdnGuessPacket, sport=56363)
+bind_layers(TCP, NdnGuessPacket, sport=6363)

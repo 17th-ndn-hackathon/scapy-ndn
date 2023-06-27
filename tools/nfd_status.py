@@ -19,17 +19,59 @@ from ndn import *
 class UnixSocket(SuperSocket):
     desc = "Unix sockets using Raw sockets (PF_INET/SOCK_RAW)"
 
-    def __init__(self):
+    def __init__(self, unix_socket_file="/var/run/nfd.sock"):
         self.outs = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.ins = self.outs
-        self.outs.connect("/var/run/nfd.sock")
+        self.outs.connect(unix_socket_file)
 
     def recv_raw(self, x=MTU):
         # type: (int) -> Tuple[Optional[Type[Packet]], Optional[bytes], Optional[float]]  # noqa: E501
         """Returns a tuple containing (cls, pkt_data, time)"""
         return NdnGuessPacket, self.ins.recv(x), None
 
+class FaceId(BaseBlockPacket):
 
+    fields_desc = [
+                    NdnTypeField(105),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class Cost(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(106),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NextHopRecord(NdnBasePacket):
+
+    TYPES_TO_CLS = { 105 : FaceId, 106 : Cost }
+
+    fields_desc = [
+                    NdnTypeField(129),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, NextHopRecord.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+class NfdFib(NdnBasePacket):
+
+    TYPES_TO_CLS = { TYPES["Name"] : Name, 129 : NextHopRecord }
+
+    fields_desc = [
+                    NdnTypeField(128),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, NfdFib.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+Content.NAMES_TO_CLS["/localhost/nfd/fib/list"] = NfdFib
 
 us = UnixSocket()
 
@@ -40,7 +82,7 @@ n = Name(value = NameComponent(value="localhost") / \
 i = Interest(value = n / CanBePrefix() / MustBeFresh())
 i.show2()
 
-t = AsyncSniffer(opened_socket=us, prn=lambda x: x.show2())
+t = AsyncSniffer(opened_socket=us, prn=lambda x: hexdump(x))
 t.start()
 sendp(i, socket = us)
 time.sleep(0.1)
