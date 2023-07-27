@@ -71,7 +71,7 @@ class NfdFib(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-Content.NAMES_TO_CLS["/localhost/nfd/fib/list"] = NfdFib
+Data.NAMES_TO_CONTENT_CLS["/localhost/nfd/fib/list"] = NfdFib
 
 us = UnixSocket()
 
@@ -80,11 +80,15 @@ n = Name(value = NameComponent(value="localhost") / \
                  NameComponent(value="fib") / \
                  NameComponent(value="list"))
 i = Interest(value = n / CanBePrefix() / MustBeFresh())
-i.show2()
 
 t = AsyncSniffer(opened_socket=us, prn=lambda x: hexdump(x))
 t.start()
 sendp(i, socket = us)
 time.sleep(0.1)
 t.stop()
-#print(type(t.results[0]))
+d = t.results[0]
+#print(type(d))
+d.show2()
+
+#d['Content'].show2()
+#d['SignatureValue'].show2()

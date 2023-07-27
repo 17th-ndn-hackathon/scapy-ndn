@@ -1,0 +1,35 @@
+# -*- mode: org -*-
+
+
+07/11/2023
+
+- Current problem: How to decode Content based-on pre-dfined Name-to-Class mapping [that can be done by library user to get decode done easily]?
+  Since Data's value is of type PacketListField when we decode Content we don't have
+    -> Sol1 [current]: Custom PacketListField which overrides getfield to save underlayer of Name
+                       This underlayer is then available during dissection of Packet
+
+    -> Sol2: Maybe we can do this in post dissection?
+
+<2023-07-16 Sun>
+
+   -> We already use sol2 i.e. post dissection in Data
+      to use the correct Signature class according to SignatureType
+      Here the Name will already have been decoded and available.
+      This will also simplify content class and not have extra
+      CustomPacketListField class
+
+
+<2023-07-15 Sat>
+
+- Raw bytes are given to Data
+- Content value is still Raw after dissection
+- In Post Dissection can we pass Content value through dissection again
+  through a new PacketListField
+
+
+<2023-07-26 Wed>
+
+- The best way to dissect is through the guess packet of Data rather than trying to join things post_dissect/dissection
+  - At that point we already would have the Name dissected
+  - If for some reason the Name is not dissected by then (malformed packet was sent), then just default Content will be used
+  - This we can also manipulate Content fields after dissection (else it was hard to bind layers after dissection)

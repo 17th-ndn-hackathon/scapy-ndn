@@ -277,6 +277,9 @@ class NdnTypeField(Field):
         if not s:
             return None, None
 
+        #if type(s) == list:
+        #    return None, None
+
         x = ord(s[:1])
 
         if x < 253:
@@ -585,31 +588,29 @@ class FinalBlockId(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-class Content(NdnBasePacket):
+#class Block2(NdnBasePacket):
+#    fields_desc = [
+#        NdnTypeField(TYPES["GenericNameComponent"]),
+#        NdnLenField(),
+#        PacketListField("value", [],
+#                        next_cls_cb=lambda pkt, lst, cur, remain : Block2,
+#                        length_from=lambda pkt: pkt.length)
+#    ]
 
-    NAMES_TO_CLS = {}
+#    def guess_payload_class(self, p):
+#        return conf.padding_layer
+
+#    #def guess_payload_class(self, p):
+#    #    return Block2
+
+class Content(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES["Content"]),
                     NdnLenField(),
-                    # StrLenField("value", "", length_from=lambda pkt: pkt.length)
                     PacketListField("value", [],
-                                     next_cls_cb=lambda pkt, lst, cur, remain
-                                     : pkt.guess_content_by_name(pkt, lst, cur, remain, Content.NAMES_TO_CLS),
-                                     length_from=lambda pkt: pkt.length)
+                                    length_from=lambda pkt: pkt.length)
                   ]
-
-    def guess_content_by_name(self, pkt, lst, cur, remain, names_to_cls):
-        # Underlayer possible here due to custom PacketListField used in Data class
-        ul = pkt.underlayer
-        while ul:
-            if isinstance(ul, Name):
-                pkt_name = ul.get_name()
-                for n in names_to_cls:
-                    if n in pkt_name:
-                        return names_to_cls[n]
-            ul = ul.underlayer
-        return Raw
 
 class MetaInfo(NdnBasePacket):
 
@@ -744,66 +745,17 @@ class SignatureValue(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['SignatureValue']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    PacketListField("value", [],
+                                    length_from=lambda pkt: pkt.length)
                   ]
 
 class DigestSha256(Packet):
 
     fields_desc = [ StrField("value", "")  ]
 
-class CustomPacketListField(PacketListField):
-    def getfield(self, pkt, s):
-        # print("====================================")
-        # type: (Packet, bytes) -> Tuple[bytes, List[BasePacket]]
-        c = len_pkt = cls = None
-        if self.length_from is not None:
-            len_pkt = self.length_from(pkt)
-        elif self.count_from is not None:
-            c = self.count_from(pkt)
-        if self.next_cls_cb is not None:
-            cls = self.next_cls_cb(pkt, [], None, s)
-            c = 1
-            if cls is None:
-                c = 0
-        prev=None
+class Data(Packet):
 
-        lst = []  # type: List[BasePacket]
-        ret = b""
-        remain = s
-        if len_pkt is not None:
-            remain, ret = s[:len_pkt], s[len_pkt:]
-        while remain:
-            if c is not None:
-                if c <= 0:
-                    break
-                c -= 1
-            try:
-                if cls is not None:
-                    p = cls(remain, _underlayer=prev)
-                    prev = p
-                else:
-                    p = self.m2i(pkt, remain)
-            except Exception:
-                if conf.debug_dissector:
-                    raise
-                p = conf.raw_layer(load=remain)
-                remain = b""
-            else:
-                if conf.padding_layer in p:
-                    pad = p[conf.padding_layer]
-                    remain = pad.load
-                    del(pad.underlayer.payload)
-                    if self.next_cls_cb is not None:
-                        cls = self.next_cls_cb(pkt, lst, p, remain)
-                        if cls is not None:
-                            c = 0 if c is None else c
-                            c += 1
-                else:
-                    remain = b""
-            lst.append(p)
-        return remain + ret, lst
-
-class Data(NdnBasePacket):
+    NAMES_TO_CONTENT_CLS = {}
 
     TYPES_TO_CLS = {
                      TYPES["Name"] : Name,
@@ -814,24 +766,58 @@ class Data(NdnBasePacket):
                    }
 
     fields_desc = [
-                    NdnTypeField(TYPES['Data']),
+                    NdnTypeField(TYPES["Data"]),
                     NdnLenField(),
-                    CustomPacketListField("value", [],
+                    PacketListField("value", [],
                                      next_cls_cb=lambda pkt, lst, cur, remain
-                                     : pkt.guess_ndn_packets(lst, cur, remain, Data.TYPES_TO_CLS),
+                                     : pkt.guess_ndn_packets(lst, cur, remain),
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-    SIG_TYPE_CLS = { 0 : DigestSha256, 1 : None, 2 : None, 3 : ECDSASignature }
+    SIG_TYPE_TO_CLS = { 0 : DigestSha256, 1 : None, 2 : None, 3 : ECDSASignature }
 
-    @classmethod
-    def post_dissection(self, pkt):
-        try:
-            pkt_cls = Data.SIG_TYPE_CLS[pkt["SignatureInfo"]["SignatureType"].value]
-            pkt["SignatureValue"].value = pkt_cls(pkt["SignatureValue"].value)
-        except Exception as e:
-            # print(e)
-            pass
+    def guess_ndn_packets(self, lst, cur, remain):
+        blk = TypeBlock(remain)
+        if blk.type == TYPES["Content"]:
+            # print('what: ', type(self))
+            # print('what lst: ', type(lst), lst)
+            for l in lst:
+                if type(l) == Name:
+                    pkt_name = l.get_name()
+                    # print(pkt_name)
+                    for n in Data.NAMES_TO_CONTENT_CLS:
+                        if n in pkt_name:
+                           # Could also be a function for flexibilty
+                           cls = Data.NAMES_TO_CONTENT_CLS[n]
+                           class Content(NdnBasePacket):
+                               fields_desc = [
+                                   NdnTypeField(TYPES["Content"]),
+                                   NdnLenField(),
+                                   PacketListField("value", [], cls,
+                                                   #next_cls_cb=lambda pkt, lst, cur, remain
+                                                   #: pkt.guess_content_by_name(pkt, lst, cur, remain),
+                                                   length_from=lambda pkt: pkt.length)
+                               ]
+                           return Content
+        if blk.type == TYPES["SignatureValue"]:
+            if type(cur) == SignatureInfo:
+                class SignatureValue(BaseBlockPacket):
+                    fields_desc = [
+                        NdnTypeField(TYPES['SignatureValue']),
+                        NdnLenField(),
+                        PacketListField("value", [],
+                                        Data.SIG_TYPE_TO_CLS[cur["SignatureType"].value],
+                                        length_from=lambda pkt: pkt.length)
+                  ]
+
+                return SignatureValue
+
+        if blk.type in Data.TYPES_TO_CLS:
+            return Data.TYPES_TO_CLS[blk.type]
+        return Raw
+
+    def guess_payload_class(self, p):
+        return conf.padding_layer
 
 class Certificate(Data):
     name = "Certificate"
