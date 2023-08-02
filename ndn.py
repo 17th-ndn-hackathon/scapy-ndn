@@ -612,6 +612,16 @@ class Content(NdnBasePacket):
                                     length_from=lambda pkt: pkt.length)
                   ]
 
+class SubjectPublicKeyInfoContent(NdnBasePacket):
+    name = "Content"
+
+    fields_desc = [
+                    NdnTypeField(TYPES["Content"]),
+                    NdnLenField(),
+                    PacketListField("value", [], X509_SubjectPublicKeyInfo,
+                                    length_from=lambda pkt: pkt.length)
+                  ]
+
 class MetaInfo(NdnBasePacket):
 
     TYPES_TO_CLS = {
@@ -779,7 +789,12 @@ class Data(Packet):
     def guess_ndn_packets(self, lst, cur, remain):
         blk = TypeBlock(remain)
         if blk.type == TYPES["Content"]:
-            # print('what: ', type(self))
+            if type(cur) == MetaInfo:
+                for mi_pkt in cur.value:
+                    if type(mi_pkt) == ContentType and \
+                       mi_pkt.value == 2: # Key
+                        return SubjectPublicKeyInfoContent
+            # print('what: ', type(cur))
             # print('what lst: ', type(lst), lst)
             for l in lst:
                 if type(l) == Name:
