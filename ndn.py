@@ -7,6 +7,10 @@ from scapy.all import Field, Packet, ByteField, XByteField, StrField, StrLenFiel
                       PacketField, PacketLenField, XIntField, bind_layers, ConditionalField, \
                       RawVal, Raw, IP, Ether, UDP, TCP, ECDSASignature, raw, IEEEDoubleField
 
+from scapy.layers.x509 import X509_SubjectPublicKeyInfo
+from scapy.utils import binrepr
+from scapy.compat import orb
+
 from scapy.base_classes import BasePacket, Gen, SetGen
 
 CONVENTIONS = { "MARKER": 1, "TYPED": 2, "EITHER": 3 }
@@ -759,9 +763,44 @@ class SignatureValue(BaseBlockPacket):
                                     length_from=lambda pkt: pkt.length)
                   ]
 
+# Alternative to dynamically generating SignatureValue class with appropriate pkt list cls
+#class ECDSASignatureValue(BaseBlockPacket):
+
+#    fields_desc = [
+#                    NdnTypeField(TYPES['SignatureValue']),
+#                    NdnLenField(),
+#                    PacketListField("value", [], ECDSASignature,
+#                                    length_from=lambda pkt: pkt.length)
+#                  ]
+
 class DigestSha256(Packet):
 
     fields_desc = [ StrField("value", "")  ]
+
+class Raw_ASN1_BIT_STRING(StrField):
+    def i2repr(self,
+               pkt,  # type: Optional[Packet]
+               v,  # type: bytes
+               ):
+        # type: (...) -> str
+
+        s = v
+        if isinstance(v, bytes):
+            v = "".join(binrepr(orb(x)).zfill(8) for x in v)
+
+        if len(s) > 16:
+            s = s[:10] + b"..." + s[-10:]
+        if len(v) > 20:
+            v = v[:10] + "..." + v[-10:]
+        return "<%s[%s]=%r>" % (
+            "Raw_ASN1_BIT_STRING",
+            v,
+            s
+        )
+
+class RsaSignature(Packet):
+
+    fields_desc = [ Raw_ASN1_BIT_STRING("value", "")  ]
 
 class Data(Packet):
 
@@ -784,7 +823,7 @@ class Data(Packet):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-    SIG_TYPE_TO_CLS = { 0 : DigestSha256, 1 : None, 2 : None, 3 : ECDSASignature }
+    SIG_TYPE_TO_CLS = { 0 : DigestSha256, 1 : RsaSignature, 2 : None, 3 : ECDSASignature }
 
     def guess_ndn_packets(self, lst, cur, remain):
         blk = TypeBlock(remain)
