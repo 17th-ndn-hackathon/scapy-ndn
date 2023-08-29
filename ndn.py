@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from scapy.all import Field, Packet, ByteField, XByteField, StrField, StrLenField, \
                       PacketListField, conf, StrFixedLenField, \
                       PacketField, PacketLenField, XIntField, bind_layers, ConditionalField, \
-                      RawVal, Raw, IP, Ether, UDP, TCP, ECDSASignature, raw, IEEEDoubleField
+                      RawVal, Raw, IP, Ether, UDP, TCP, ECDSASignature, raw, IEEEDoubleField, \
+                      Packet_metaclass
 
 from scapy.layers.x509 import X509_SubjectPublicKeyInfo
 from scapy.utils import binrepr
@@ -754,28 +755,38 @@ class SignatureInfo(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-class SignatureValue(BaseBlockPacket):
+class _SignatureValue_metaclass(Packet_metaclass):
 
-    fields_desc = [
-                    NdnTypeField(TYPES['SignatureValue']),
-                    NdnLenField(),
-                    PacketListField("value", [],
-                                    length_from=lambda pkt: pkt.length)
-                  ]
+    def __new__(cls, name, bases, dct):
 
-# Alternative to dynamically generating SignatureValue class with appropriate pkt list cls
-#class ECDSASignatureValue(BaseBlockPacket):
+        fields_desc = [
+            NdnTypeField(TYPES['SignatureValue']),
+            NdnLenField(),
+        ]
+        if dct["SignatureClass"] is None:
+            fields_desc.append(
+                PacketListField("value", [], length_from=lambda pkt: pkt.length)
+            )
+        else:
+            fields_desc.append(
+                PacketListField("value", [], dct["SignatureClass"], length_from=lambda pkt: pkt.length)
+            )
+        dct['fields_desc'] = fields_desc
 
-#    fields_desc = [
-#                    NdnTypeField(TYPES['SignatureValue']),
-#                    NdnLenField(),
-#                    PacketListField("value", [], ECDSASignature,
-#                                    length_from=lambda pkt: pkt.length)
-#                  ]
+        return super(_SignatureValue_metaclass, cls).__new__(cls, name, bases, dct)
+
+class SignatureValue(BaseBlockPacket, metaclass=_SignatureValue_metaclass):
+    SignatureClass = None
+
+class ECDSASignatureValue(BaseBlockPacket, metaclass=_SignatureValue_metaclass):
+    SignatureClass = ECDSASignature
 
 class DigestSha256(Packet):
 
     fields_desc = [ StrField("value", "")  ]
+
+class DigestSha256SignatureValue(BaseBlockPacket, metaclass=_SignatureValue_metaclass):
+    SignatureClass = DigestSha256
 
 class Raw_ASN1_BIT_STRING(StrField):
     def i2repr(self,
@@ -802,6 +813,9 @@ class RsaSignature(Packet):
 
     fields_desc = [ Raw_ASN1_BIT_STRING("value", "")  ]
 
+class RsaSignatureValue(BaseBlockPacket, metaclass=_SignatureValue_metaclass):
+    SignatureClass = RsaSignature
+
 class Data(Packet):
 
     NAMES_TO_CONTENT_CLS = {}
@@ -823,7 +837,10 @@ class Data(Packet):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-    SIG_TYPE_TO_CLS = { 0 : DigestSha256, 1 : RsaSignature, 2 : None, 3 : ECDSASignature }
+    SIG_TYPE_TO_CLS = {
+        0 : DigestSha256SignatureValue, 1 : RsaSignatureValue,
+        3 : ECDSASignatureValue
+    }
 
     def guess_ndn_packets(self, lst, cur, remain):
         blk = TypeBlock(remain)
@@ -855,15 +872,9 @@ class Data(Packet):
                            return Content
         if blk.type == TYPES["SignatureValue"]:
             if type(cur) == SignatureInfo:
-                class SignatureValue(BaseBlockPacket):
-                    fields_desc = [
-                        NdnTypeField(TYPES['SignatureValue']),
-                        NdnLenField(),
-                        PacketListField("value", [],
-                                        Data.SIG_TYPE_TO_CLS[cur["SignatureType"].value],
-                                        length_from=lambda pkt: pkt.length)
-                  ]
-
+                sigtype = cur["SignatureType"].value
+                if sigtype in Data.SIG_TYPE_TO_CLS and sigtype is not None:
+                    return Data.SIG_TYPE_TO_CLS[sigtype]
                 return SignatureValue
 
         if blk.type in Data.TYPES_TO_CLS:
