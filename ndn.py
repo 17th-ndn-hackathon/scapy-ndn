@@ -307,6 +307,27 @@ class NdnZeroLenField(ByteField):
         # type: (str, Optional[int]) -> None
         ByteField.__init__(self, name, 0)
 
+class Raw_ASN1_BIT_STRING(StrField):
+    def i2repr(self,
+               pkt,  # type: Optional[Packet]
+               v,  # type: bytes
+               ):
+        # type: (...) -> str
+
+        s = v
+        if isinstance(v, bytes):
+            v = "".join(binrepr(orb(x)).zfill(8) for x in v)
+
+        if len(s) > 16:
+            s = s[:10] + b"..." + s[-10:]
+        if len(v) > 20:
+            v = v[:10] + "..." + v[-10:]
+        return "<%s[%s]=%r>" % (
+            "Raw_ASN1_BIT_STRING",
+            v,
+            s
+        )
+
 class BaseBlockPacket(Packet):
     def guess_payload_class(self, p):
         return conf.padding_layer
@@ -475,7 +496,7 @@ class Name(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
               ]
 
-    def _get_name(self):
+    def _to_uri(self):
         name_str = "/"
         for f in self.value:
             if isinstance(f.value, bytes):
@@ -485,8 +506,8 @@ class Name(NdnBasePacket):
                 name_str += "{}/".format(f.value)
         return name_str
 
-    def get_name(self):
-        return self.__class__(raw(self))._get_name()
+    def to_uri(self):
+        return self.__class__(raw(self))._to_uri()
 
 class Nonce(BaseBlockPacket):
     name = "Nonce"
@@ -755,70 +776,59 @@ class SignatureInfo(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-class _SignatureValue_metaclass(Packet_metaclass):
-
-    def __new__(cls, name, bases, dct):
-
-        fields_desc = [
-            NdnTypeField(TYPES['SignatureValue']),
-            NdnLenField(),
-        ]
-        if dct["SignatureClass"] is None:
-            fields_desc.append(
-                PacketListField("value", [], length_from=lambda pkt: pkt.length)
-            )
-        else:
-            fields_desc.append(
-                PacketListField("value", [], dct["SignatureClass"], length_from=lambda pkt: pkt.length)
-            )
-        dct['fields_desc'] = fields_desc
-
-        return super(_SignatureValue_metaclass, cls).__new__(cls, name, bases, dct)
-
-class SignatureValue(BaseBlockPacket, metaclass=_SignatureValue_metaclass):
-    SignatureClass = None
-
-class ECDSASignatureValue(BaseBlockPacket, metaclass=_SignatureValue_metaclass):
-    SignatureClass = ECDSASignature
-
 class DigestSha256(Packet):
 
     fields_desc = [ StrField("value", "")  ]
-
-class DigestSha256SignatureValue(BaseBlockPacket, metaclass=_SignatureValue_metaclass):
-    SignatureClass = DigestSha256
-
-class Raw_ASN1_BIT_STRING(StrField):
-    def i2repr(self,
-               pkt,  # type: Optional[Packet]
-               v,  # type: bytes
-               ):
-        # type: (...) -> str
-
-        s = v
-        if isinstance(v, bytes):
-            v = "".join(binrepr(orb(x)).zfill(8) for x in v)
-
-        if len(s) > 16:
-            s = s[:10] + b"..." + s[-10:]
-        if len(v) > 20:
-            v = v[:10] + "..." + v[-10:]
-        return "<%s[%s]=%r>" % (
-            "Raw_ASN1_BIT_STRING",
-            v,
-            s
-        )
 
 class RsaSignature(Packet):
 
     fields_desc = [ Raw_ASN1_BIT_STRING("value", "")  ]
 
-class RsaSignatureValue(BaseBlockPacket, metaclass=_SignatureValue_metaclass):
-    SignatureClass = RsaSignature
+# Could also apply/extend this class to other Packets
+class _NdnPacketList_metaclass(Packet_metaclass):
 
-class Data(Packet):
+    def __new__(cls, name, bases, dct):
 
-    NAMES_TO_CONTENT_CLS = {}
+        fields_desc = []
+        print(dct)
+        if "NdnType" not in dct:
+            # Will throw an error that default is not provided
+            fields_desc.append(NdnTypeField())
+        else:
+            fields_desc.append(NdnTypeField(dct["NdnType"]))
+
+        fields_desc.append(NdnLenField())
+
+        if "PktCls" not in dct:
+            fields_desc.append(
+                PacketListField("value", [], length_from=lambda pkt: pkt.length)
+            )
+        else:
+            fields_desc.append(
+                PacketListField("value", [], dct["PktCls"], length_from=lambda pkt: pkt.length)
+            )
+        dct['fields_desc'] = fields_desc
+
+        return super(_NdnPacketList_metaclass, cls).__new__(cls, name, bases, dct)
+
+class SignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = TYPES['SignatureValue']
+
+class ECDSASignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = TYPES['SignatureValue']
+    PktCls  = ECDSASignature
+
+class DigestSha256SignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = TYPES['SignatureValue']
+    PktCls  = DigestSha256
+
+class RsaSignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = TYPES['SignatureValue']
+    PktCls  = RsaSignature
+
+class Data(NdnBasePacket):
+
+    NAME_URI_TO_CONTENT_CLS = {}
 
     TYPES_TO_CLS = {
                      TYPES["Name"] : Name,
@@ -833,7 +843,7 @@ class Data(Packet):
                     NdnLenField(),
                     PacketListField("value", [],
                                      next_cls_cb=lambda pkt, lst, cur, remain
-                                     : pkt.guess_ndn_packets(lst, cur, remain),
+                                     : pkt.guess_ndn_packets(lst, cur, remain, Data.TYPES_TO_CLS),
                                      length_from=lambda pkt: pkt.length)
                   ]
 
@@ -842,7 +852,12 @@ class Data(Packet):
         3 : ECDSASignatureValue
     }
 
-    def guess_ndn_packets(self, lst, cur, remain):
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+        '''
+        Override to decode:
+            - Content class for the Name once Name is decoded [@TODO: add a global function like bind_layers]
+            - SignatureValue class once SignatureType is decoded
+        '''
         blk = TypeBlock(remain)
         if blk.type == TYPES["Content"]:
             if type(cur) == MetaInfo:
@@ -853,23 +868,17 @@ class Data(Packet):
             # print('what: ', type(cur))
             # print('what lst: ', type(lst), lst)
             for l in lst:
-                if type(l) == Name:
-                    pkt_name = l.get_name()
-                    # print(pkt_name)
-                    for n in Data.NAMES_TO_CONTENT_CLS:
-                        if n in pkt_name:
-                           # Could also be a function for flexibilty
-                           cls = Data.NAMES_TO_CONTENT_CLS[n]
-                           class Content(NdnBasePacket):
-                               fields_desc = [
-                                   NdnTypeField(TYPES["Content"]),
-                                   NdnLenField(),
-                                   PacketListField("value", [], cls,
-                                                   #next_cls_cb=lambda pkt, lst, cur, remain
-                                                   #: pkt.guess_content_by_name(pkt, lst, cur, remain),
-                                                   length_from=lambda pkt: pkt.length)
-                               ]
-                           return Content
+                if not isinstance(l, Name):
+                    continue
+                pkt_name = l.to_uri()
+                # print(pkt_name)
+                for n in Data.NAME_URI_TO_CONTENT_CLS:
+                    if n in pkt_name:
+                       # Could also be a function for flexibilty
+                       class Content(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+                           NdnType = TYPES["Content"]
+                           PktCls  = Data.NAME_URI_TO_CONTENT_CLS[n]
+                       return Content
         if blk.type == TYPES["SignatureValue"]:
             if type(cur) == SignatureInfo:
                 sigtype = cur["SignatureType"].value
@@ -877,9 +886,9 @@ class Data(Packet):
                     return Data.SIG_TYPE_TO_CLS[sigtype]
                 return SignatureValue
 
-        if blk.type in Data.TYPES_TO_CLS:
-            return Data.TYPES_TO_CLS[blk.type]
-        return Raw
+        if blk.type in types_to_cls:
+            return types_to_cls[blk.type]
+        return default
 
     def guess_payload_class(self, p):
         return conf.padding_layer
