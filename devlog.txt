@@ -33,3 +33,10 @@
   - At that point we already would have the Name dissected
   - If for some reason the Name is not dissected by then (malformed packet was sent), then just default Content will be used
   - This we can also manipulate Content fields after dissection (else it was hard to bind layers after dissection)
+
+
+<2023-11-7 Wed>
+
+- In scapy, if they need to resolve what packet follows Ether for example they need the imports of say IP
+  because thats where the bind_layers are defined. That's why they show examples with importing from scapy.all
+  We could do something similar for Ndn

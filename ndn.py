@@ -238,10 +238,11 @@ class NdnLenField(Field):
 class NdnTypeField(Field):
     __slots__ = ["valid_types"]
 
-    def __init__(self, default, name="type", valid_types=None, fmt="!H"):  # noqa: E501
+    def __init__(self, default, valid_types=None, fmt="!H"):  # noqa: E501
         # If valid_types is None then all types expected, for example in NameComponent packet
         self.valid_types = valid_types
-        Field.__init__(self, name, default, fmt)
+        # Scapy is using "type" in various places so should be safe to do so
+        Field.__init__(self, "type", default, fmt)
 
     def m2i(self, pkt, x):
         #print("NdnTypeField m2i: ", x)
@@ -334,7 +335,7 @@ class BaseBlockPacket(Packet):
 
 class TypeBlock(BaseBlockPacket):
 
-    fields_desc = [ NdnTypeField("", "type") ]
+    fields_desc = [ NdnTypeField("") ]
 
 class NameComponent(Packet):
     name = "Name Component"
@@ -790,9 +791,9 @@ class _NdnPacketList_metaclass(Packet_metaclass):
     def __new__(cls, name, bases, dct):
 
         fields_desc = []
-        print(dct)
         if "NdnType" not in dct:
-            # Will throw an error that default is not provided
+            # Will throw an error that default is not provided,
+            # else we can provide empty string here like TypeBlock
             fields_desc.append(NdnTypeField())
         else:
             fields_desc.append(NdnTypeField(dct["NdnType"]))
@@ -918,35 +919,31 @@ class LinkObject(Data):
                     NdnTypeField(TYPES['Data']),
                     NdnLenField(),
                     PacketListField("value", [],
+                                     # Do we use guess packets from Data here now, or since ContentType is known that is not needed
+                                     # But SignatureValue still needs to be decoded
+                                     # If someone is testing malformed LinkContent they can put anything
+                                     # so maybe better to use Data's guess_ndn_packtets
                                      next_cls_cb=lambda pkt, lst, cur, remain
                                      : pkt.guess_ndn_packets(lst, cur, remain, LinkObject.TYPES_TO_CLS),
                                      length_from=lambda pkt: pkt.length)
                   ]
 
 class NdnGuessPacket(Packet):
+    'Dummy packet for guessing NDN packets via bind_layers'
 
     TYPES_TO_CLS = {
                      TYPES["Interest"] : Interest,
-                     TYPES["Data"] : Data
+                     TYPES["Data"] : Data,
+                     # TYPES["Lp"]
                    }
 
-    # Skip printing NdnPacket as this is just a
-    # class with no fields to decide the real packet
-    def _show_or_dump(self,
-                      dump=False,  # type: bool
-                      indent=3,  # type: int
-                      lvl="",  # type: str
-                      label_lvl="",  # type: str
-                      first_call=True  # type: bool
-                      ):
-        return self.payload._show_or_dump(dump, indent, lvl, label_lvl, first_call)
-
-    def guess_payload_class(self, payload):
-        blk = TypeBlock(payload)
-        if blk.type in NdnGuessPacket.TYPES_TO_CLS:
+    @classmethod
+    def dispatch_hook(cls, _pkt=None, *args, **kargs):
+        # type: (Optional[bytes], *Any, **Any) -> Type[Packet]
+        if _pkt is not None:
+            blk = TypeBlock(_pkt)
             return NdnGuessPacket.TYPES_TO_CLS[blk.type]
-        else:
-            return Block
+        return Block
 
 bind_layers(Ether, NdnGuessPacket, type=0x8624)
 bind_layers(UDP, NdnGuessPacket, sport=6363)
