@@ -827,9 +827,14 @@ class RsaSignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['SignatureValue']
     PktCls  = RsaSignature
 
-class Data(NdnBasePacket):
+NAME_URI_TO_CONTENT_CLS = {}
+def bind_content_to_name(name_uri, content_cls):
+    class Content(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+        NdnType = TYPES["Content"]
+        PktCls  = content_cls
+    NAME_URI_TO_CONTENT_CLS[name_uri] = Content
 
-    NAME_URI_TO_CONTENT_CLS = {}
+class Data(NdnBasePacket):
 
     TYPES_TO_CLS = {
                      TYPES["Name"] : Name,
@@ -856,7 +861,7 @@ class Data(NdnBasePacket):
     def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
         '''
         Override to decode:
-            - Content class for the Name once Name is decoded [@TODO: add a global function like bind_layers]
+            - Content class for the Name once Name is decoded
             - SignatureValue class once SignatureType is decoded
         '''
         blk = TypeBlock(remain)
@@ -873,13 +878,9 @@ class Data(NdnBasePacket):
                     continue
                 pkt_name = l.to_uri()
                 # print(pkt_name)
-                for n in Data.NAME_URI_TO_CONTENT_CLS:
+                for n in NAME_URI_TO_CONTENT_CLS:
                     if n in pkt_name:
-                       # Could also be a function for flexibilty
-                       class Content(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
-                           NdnType = TYPES["Content"]
-                           PktCls  = Data.NAME_URI_TO_CONTENT_CLS[n]
-                       return Content
+                       return NAME_URI_TO_CONTENT_CLS[n]
         if blk.type == TYPES["SignatureValue"]:
             if type(cur) == SignatureInfo:
                 sigtype = cur["SignatureType"].value
