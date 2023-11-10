@@ -260,6 +260,8 @@ class NdnTypeField(Field):
             return b""
         return x
 
+    # TODO: Show any known type name in bracket for that particular packet (something like enum)
+    # Maybe helpful if multiple type like NameComponent - else it should be clear by Name
     def i2repr(self, pkt, x):
         if x is None:
             return ""
@@ -759,6 +761,7 @@ class ValidityPeriod(NdnBasePacket):
 
 class SignatureInfo(NdnBasePacket):
 
+    # This should Cover Data, Interest, and Certificate
     TYPES_TO_CLS = {
                      TYPES["SignatureType"] : SignatureType,
                      TYPES["KeyLocator"] : KeyLocator,
@@ -891,9 +894,6 @@ class Data(NdnBasePacket):
         if blk.type in types_to_cls:
             return types_to_cls[blk.type]
         return default
-
-    def guess_payload_class(self, p):
-        return conf.padding_layer
 
 class Certificate(Data):
     name = "Certificate"

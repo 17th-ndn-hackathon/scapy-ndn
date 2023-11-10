@@ -1,0 +1,27 @@
+[build-system]
+requires = [ "setuptools>=62.0.0" ]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scapyndn"
+version = "0.1.0"
+authors = [
+    { name="Ashlesh Gawande" },
+]
+license = { text="GPL-2.0-only" }
+description = "Scapy NDN: Named-Data Networking definitions and helpers for Scapy"
+keywords = [ "network", "ndn", "scapy" ]
+
+dependencies = [
+  "scapy"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = [
+    "scapyndn*",
+]
+exclude = [
+    "test*",
+    "doc*",
+]
