@@ -1,0 +1,42 @@
+# -*- mode: python -*-
+% Regression tests for NFD status
+
+############
+############
++ Tests on NFD status
+
+= NFD status content resolve
+
+# Scapy also import everything in its tests (for bind_layers etc. to be set)
+from scapyndn.pkt import *
+from scapyndn.contents.nfd import *
+
+status_bytes = b'\x06\x9c\x07(\x08\tlocalhost\x08\x03nfd\x08\x03fib\x08\x04list6\x08\x00\x00\x01\x8b\xb6M\xa3'      + \
+               b'\xc92\x01\x00\x14\t\x19\x02\x03\xe8\x1a\x032\x01\x00\x15>\x80 \x07\x15\x08\tlocalhost\x08\x03nfd'  + \
+               b'\x08\x03rib\x81\x07i\x02\x01\x02j\x01\x00\x80\x1a\x07\x10\x08\tlocalhost\x08\x03nfd\x81\x06i\x01'  + \
+               b'\x01j\x01\x00\x16\x03\x1b\x01\x00\x17 \xdb\xccv -$\x8e\xfds\x9f\x9cq\x06\x8c\t\x98q\x9dQ\xdc\xb4H' + \
+               b'\xa0\xedG\xcb\xa2\xf6\xa0\xc9\xb2\xd2'
+
+d = Data(status_bytes)
+
+d.show2()
+
+assert "Content" in d
+assert "NfdFib" in d["Content"]
+assert "Name" in d["Content"]["NfdFib"]
+assert "NextHopRecord" in d["Content"]["NfdFib"]
+
+for fib in d["Content"].value:
+    assert isinstance(fib, NfdFib)
+    rib = False
+    for pkt in fib.value:
+        if isinstance(pkt, Name):
+            if "/localhost/nfd/rib" in pkt.to_uri():
+                rib = True
+        if isinstance(pkt, NextHopRecord):
+            if rib is True:
+                assert pkt["FaceId"].value == 258
+                assert pkt["Cost"].value   == 0
+            else:
+                assert pkt["FaceId"].value == 1
+                assert pkt["Cost"].value   == 0

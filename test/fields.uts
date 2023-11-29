@@ -7,12 +7,10 @@
 
 = Ndn Length Field tests
 
-#import sys
-#print(sys.path)
-
-from ndn import NdnLenField, NameComponent, Sha256Digest, TYPES, COMP_TYPES, \
-                Interest, Name, Nonce, DoubleNameComponent, \
-                NonNegIntNameComponent, VersionNameComponent
+from scapyndn.pkt import \
+    NdnLenField, NameComponent, Sha256Digest, TYPES, COMP_TYPES, \
+    Interest, Name, Nonce, DoubleNameComponent, \
+    NonNegIntNameComponent, VersionNameComponent
 
 # Empty
 assert NdnLenField().addfield(Raw(""), b"\x08", None) == b"\x08"

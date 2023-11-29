@@ -6,7 +6,8 @@
 
 = Nonce tests
 
-from ndn import NdnLenField, NameComponent, Sha256Digest, TYPES, COMP_TYPES, Interest, Name, Nonce
+from scapyndn.pkt import NdnLenField, NameComponent, Sha256Digest, \
+                         TYPES, COMP_TYPES, Interest, Name, Nonce
 
 n = Nonce(b"\x0A\x04\x00\x00\x00\x20")
 assert n.type   == TYPES["Nonce"]

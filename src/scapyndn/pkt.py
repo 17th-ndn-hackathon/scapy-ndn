@@ -831,10 +831,11 @@ class RsaSignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
     PktCls  = RsaSignature
 
 NAME_URI_TO_CONTENT_CLS = {}
-def bind_content_to_name(name_uri, content_cls):
+def bind_content_to_name(name_uri, content_val_cls):
+    # TODO: if user needs to pass a custom Content class for some reason
     class Content(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
         NdnType = TYPES["Content"]
-        PktCls  = content_cls
+        PktCls  = content_val_cls
     NAME_URI_TO_CONTENT_CLS[name_uri] = Content
 
 class Data(NdnBasePacket):
