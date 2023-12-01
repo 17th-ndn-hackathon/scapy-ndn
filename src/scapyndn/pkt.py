@@ -222,7 +222,7 @@ class NdnLenField(Field):
             return s, None
 
         if not s:
-            return None, None
+            return s, None
 
         # Check the first octet
         x = ord(s[:1])

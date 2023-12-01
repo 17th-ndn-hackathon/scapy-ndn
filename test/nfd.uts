@@ -22,6 +22,8 @@ d = Data(status_bytes)
 d.show2()
 
 assert "Content" in d
+assert "SignatureInfo" in d
+assert "DigestSha256SignatureValue" in d
 assert "NfdFib" in d["Content"]
 assert "Name" in d["Content"]["NfdFib"]
 assert "NextHopRecord" in d["Content"]["NfdFib"]

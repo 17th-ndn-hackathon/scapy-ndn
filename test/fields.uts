@@ -34,7 +34,7 @@ assert NdnLenField().addfield(Raw(q), b"\x08", None) == b"\x08\xfe\x00\x06\x1a\x
 # r = "test" * 2000000000
 # assert NdnLenField().addfield(Raw(r), b"\x08", None) == b'\x08\xff\x00\x00\x00\x01\xdc\xd6\x50\x00'
 
-assert NdnLenField().getfield(None, b"") == (None, None)
+assert NdnLenField().getfield(None, b"") == (b"", None)
 assert NdnLenField().getfield(None, b"\x04test") == (b"test", 4)
 
 # Technically illegal packet - but someone should be able to form

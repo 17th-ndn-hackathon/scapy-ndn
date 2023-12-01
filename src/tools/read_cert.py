@@ -4,7 +4,7 @@ import sqlite3
 import os
 
 from scapy.all import *
-from ndn import *
+from scapyndn.pkt import *
 
 home_dir = os.getenv("HOME")
 

@@ -1,5 +1,5 @@
 from scapy.all import *
-from ndn import *
+from scapyndn.pkt import *
 
 import argparse
 

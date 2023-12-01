@@ -1,9 +1,6 @@
+
 from scapy.all import *
-
-import sys
-sys.path.append("/home/ashlesh/ndn-src/scapy-ndn")
-
-from ndn import *
+from scapyndn.pkt import *
 
 import argparse
 
