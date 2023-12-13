@@ -49,6 +49,8 @@ TYPES = {
           "InterestLifetime"               : 12, # 0x0C
           "HopLimit"                       : 34, # 0x22
           "ApplicationParameters"          : 36, # 0x24
+          "InterestSignatureInfo"          : 44, # 0x2C
+          "InterestSignatureValue"         : 46, # 0x2E
           "MetaInfo"                       : 20, # 0x14
           "Content"                        : 21, # 0x15
           "SignatureInfo"                  : 22, # 0x16
@@ -92,6 +94,26 @@ COMP_TYPES = {
           "t"            : TYPED_NAME_COMP["TimestampNameComponent"],
           "seq"          : TYPED_NAME_COMP["SequenceNumNameComponent"],
         }
+
+LP_TYPES = {
+             "LpPacket"           : 100, # 0x64
+             "Fragment"           : 80,  # 0x50
+             "Sequence"           : 81,  # 0x51
+             "FragIndex"          : 82,  # 0x52
+             "FragCount"          : 83,  # 0x53
+             "PitToken"           : 98,  # 0x62
+             "Nack"               : 800, # 0x320
+             "NackReason"         : 801, # 0x321
+             "IncomingFaceId"     : 812, # 0x32C
+             "NextHopFaceId"      : 816, # 0x330
+             "CachePolicy"        : 820, # 0x334
+             "CachePolicyType"    : 821, # 0x335
+             "CachePolicyMark"    : 832, # 0x340
+             "Ack"                : 836, # 0x344
+             "TxSequence"         : 840, # 0x348
+             "NonDiscovery"       : 844, # 0x34C
+             "PrefixAnnouncement" : 848, # 0x350
+           }
 
 class NonNegativeIntField(Field):
     __slots__ = ["length_from", "enum"]
@@ -138,6 +160,7 @@ class NonNegativeIntField(Field):
         len_pkt = (self.length_from or (lambda x: 0))(pkt)
         self.sz = len_pkt
 
+        val = None
         if self.sz == 1:
             val = self.m2i(pkt, struct.unpack(">B", s[:len_pkt])[0])
         elif self.sz == 2:
@@ -253,8 +276,11 @@ class NdnTypeField(Field):
         if isinstance(x, str) and x in COMP_TYPES:
             x = COMP_TYPES[x]
 
-        if self.name in TYPES and x:
+        # if self.name in TYPES and x:
+        if self.name in TYPES:
             return TYPES[self.name]
+        elif self.name in LP_TYPES:
+            return LP_TYPES[self.name]
 
         if x is None:
             return b""
@@ -345,7 +371,7 @@ class NameComponent(Packet):
     fields_desc = [
                     NdnTypeField(TYPES['GenericNameComponent']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
     def guess_payload_class(self, p):
@@ -460,7 +486,7 @@ class Sha256Digest(NameComponent):
     fields_desc = [
                     NdnTypeField(TYPES['ImplicitSha256DigestComponent']),
                     NdnLenField(default=32),
-                    StrFixedLenField("value", "", 32)
+                    StrFixedLenField("value", b"", 32)
                   ]
 
 class ParamsSha256(NameComponent):
@@ -469,7 +495,7 @@ class ParamsSha256(NameComponent):
     fields_desc = [
                     NdnTypeField(TYPES['ParametersSha256DigestComponent']),
                     NdnLenField(default=32),
-                    StrFixedLenField("value", "", 32)
+                    StrFixedLenField("value", b"", 32)
                   ]
 
 class NdnBasePacket(Packet):
@@ -558,29 +584,7 @@ class ApplicationParameters(NdnBasePacket):
     fields_desc = [
                     NdnTypeField(TYPES["ApplicationParameters"]),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
-                  ]
-
-class Interest(NdnBasePacket):
-    name = "Interest"
-
-    TYPES_TO_CLS = {
-                     TYPES["Name"] : Name, TYPES["CanBePrefix"] : CanBePrefix,
-                     TYPES["MustBeFresh"] : MustBeFresh,
-                     TYPES["ForwardingHint"] : ForwardingHint,
-                     TYPES["Nonce"] : Nonce,
-                     TYPES["InterestLifetime"] : InterestLifetime,
-                     TYPES["HopLimit"] : HopLimit,
-                     TYPES["ApplicationParameters"] : ApplicationParameters
-                   }
-
-    fields_desc = [
-                    NdnTypeField(TYPES['Interest']),
-                    NdnLenField(),
-                    PacketListField("value", [],
-                                     next_cls_cb=lambda pkt, lst, cur, remain
-                                     : pkt.guess_ndn_packets(lst, cur, remain, Interest.TYPES_TO_CLS),
-                                     length_from=lambda pkt: pkt.length)
+                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
 class ContentType(BaseBlockPacket):
@@ -684,7 +688,7 @@ class KeyDigest(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['KeyDigest']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
 class KeyLocator(NdnBasePacket):
@@ -708,7 +712,7 @@ class SignatureNonce(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['SignatureNonce']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
 class SignatureTime(BaseBlockPacket):
@@ -716,7 +720,8 @@ class SignatureTime(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['SignatureTime']),
                     NdnLenField(default=4),
-                    NonNegativeIntField("value", 0)
+                    # NonNegativeIntField("value", 0)
+                    TimestampIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
 class SignatureSeqNum(BaseBlockPacket):
@@ -732,7 +737,7 @@ class NotBefore(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['NotBefore']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
 class NotAfter(BaseBlockPacket):
@@ -740,7 +745,7 @@ class NotAfter(BaseBlockPacket):
     fields_desc = [
                     NdnTypeField(TYPES['NotAfter']),
                     NdnLenField(),
-                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
 class ValidityPeriod(NdnBasePacket):
@@ -782,11 +787,11 @@ class SignatureInfo(NdnBasePacket):
 
 class DigestSha256(Packet):
 
-    fields_desc = [ StrField("value", "")  ]
+    fields_desc = [ StrField("value", b"")  ]
 
 class RsaSignature(Packet):
 
-    fields_desc = [ Raw_ASN1_BIT_STRING("value", "")  ]
+    fields_desc = [ Raw_ASN1_BIT_STRING("value", b"")  ]
 
 # Could also apply/extend this class to other Packets
 class _NdnPacketList_metaclass(Packet_metaclass):
@@ -830,6 +835,75 @@ class RsaSignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['SignatureValue']
     PktCls  = RsaSignature
 
+class InterestSignatureInfo(NdnBasePacket):
+    TYPES_TO_CLS = {
+                     TYPES["SignatureType"] : SignatureType,
+                     TYPES["KeyLocator"] : KeyLocator,
+                     TYPES["SignatureNonce"] : SignatureNonce,
+                     TYPES["SignatureTime"] : SignatureTime,
+                     TYPES["SignatureSeqNum"] : SignatureSeqNum
+                   }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['InterestSignatureInfo']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, SignatureInfo.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+class InterestSignatureValue(SignatureValue):
+    NdnType = TYPES["InterestSignatureValue"]
+
+SIG_TYPE_TO_CLS = {
+    0 : DigestSha256SignatureValue,
+    1 : RsaSignatureValue,
+    3 : ECDSASignatureValue
+}
+
+class Interest(NdnBasePacket):
+    name = "Interest"
+
+    TYPES_TO_CLS = {
+                     TYPES["Name"] : Name,
+                     TYPES["CanBePrefix"] : CanBePrefix,
+                     TYPES["MustBeFresh"] : MustBeFresh,
+                     TYPES["ForwardingHint"] : ForwardingHint,
+                     TYPES["Nonce"] : Nonce,
+                     TYPES["InterestLifetime"] : InterestLifetime,
+                     TYPES["HopLimit"] : HopLimit,
+                     TYPES["ApplicationParameters"] : ApplicationParameters,
+                     TYPES["InterestSignatureInfo"] : InterestSignatureInfo,
+                     TYPES["InterestSignatureValue"] : InterestSignatureValue,
+                   }
+
+    fields_desc = [
+                    NdnTypeField(TYPES['Interest']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, Interest.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+        '''
+        Override to decode:
+            - InterestSignatureValue class once InterestSignatureType is decoded
+        '''
+        blk = TypeBlock(remain)
+        if blk.type == TYPES["InterestSignatureValue"]:
+            if type(cur) == InterestSignatureInfo:
+                sigtype = cur["SignatureType"].value
+                if sigtype in SIG_TYPE_TO_CLS and sigtype is not None:
+                   return SIG_TYPE_TO_CLS[sigtype]
+                return InterestSignatureValue
+
+        if blk.type in types_to_cls:
+            return types_to_cls[blk.type]
+        return default
+
 NAME_URI_TO_CONTENT_CLS = {}
 def bind_content_to_name(name_uri, content_val_cls):
     # TODO: if user needs to pass a custom Content class for some reason
@@ -857,11 +931,6 @@ class Data(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-    SIG_TYPE_TO_CLS = {
-        0 : DigestSha256SignatureValue, 1 : RsaSignatureValue,
-        3 : ECDSASignatureValue
-    }
-
     def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
         '''
         Override to decode:
@@ -888,8 +957,8 @@ class Data(NdnBasePacket):
         if blk.type == TYPES["SignatureValue"]:
             if type(cur) == SignatureInfo:
                 sigtype = cur["SignatureType"].value
-                if sigtype in Data.SIG_TYPE_TO_CLS and sigtype is not None:
-                    return Data.SIG_TYPE_TO_CLS[sigtype]
+                if sigtype in SIG_TYPE_TO_CLS and sigtype is not None:
+                    return SIG_TYPE_TO_CLS[sigtype]
                 return SignatureValue
 
         if blk.type in types_to_cls:
@@ -930,6 +999,65 @@ class LinkObject(Data):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
+class Sequence(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(LP_TYPES['Sequence']),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class FragIndex(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(LP_TYPES['FragIndex']),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class FragCount(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(LP_TYPES['FragCount']),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NackReason(BaseBlockPacket):
+
+    NACK_REASONS = {
+                       0 : "None",
+                      50 : "Congestion",
+                     100 : "Duplicate",
+                     150 : "NoRoute"
+                   }
+
+    fields_desc = [
+                    NdnTypeField(LP_TYPES['NackReason']),
+                    NdnLenField(),
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length, enum=NACK_REASONS)
+                  ]
+
+class Nack(BaseBlockPacket):
+
+    fields_desc = [
+                    NdnTypeField(LP_TYPES['Nack']),
+                    NdnLenField(),
+                    PacketListField("value", "", NackReason, length_from=lambda pkt: pkt.length)
+                  ]
+
+class LpPacket(NdnBasePacket):
+    TYPES_TO_CLS = { LP_TYPES['Nack'] : Nack }
+
+    fields_desc = [
+                    NdnTypeField(LP_TYPES['LpPacket']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, LpPacket.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
 class NdnGuessPacket(Packet):
     'Dummy packet for guessing NDN packets via bind_layers'
 
@@ -949,5 +1077,8 @@ class NdnGuessPacket(Packet):
 
 bind_layers(Ether, NdnGuessPacket, type=0x8624)
 bind_layers(UDP, NdnGuessPacket, sport=6363)
+bind_layers(UDP, NdnGuessPacket, dport=6363)
 bind_layers(UDP, NdnGuessPacket, sport=56363)
+bind_layers(UDP, NdnGuessPacket, dport=56363)
 bind_layers(TCP, NdnGuessPacket, sport=6363)
+bind_layers(TCP, NdnGuessPacket, dport=6363)

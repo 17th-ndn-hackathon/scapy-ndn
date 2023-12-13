@@ -4,10 +4,17 @@ from scapyndn.pkt import NdnTypeField, NdnLenField, NonNegativeIntField, \
                          BaseBlockPacket, NdnBasePacket, Name, TYPES, \
                          bind_content_to_name
 
+NFD_MGMT_TYPES = {
+    "FaceId": 105,
+    "Cost": 106,
+    "NfdFib": 128,
+    "NextHopRecord": 129
+}
+
 class FaceId(BaseBlockPacket):
 
     fields_desc = [
-                    NdnTypeField(105),
+                    NdnTypeField(NFD_MGMT_TYPES["FaceId"]),
                     NdnLenField(),
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
@@ -15,17 +22,17 @@ class FaceId(BaseBlockPacket):
 class Cost(BaseBlockPacket):
 
     fields_desc = [
-                    NdnTypeField(106),
+                    NdnTypeField(NFD_MGMT_TYPES["Cost"]),
                     NdnLenField(),
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
 class NextHopRecord(NdnBasePacket):
 
-    TYPES_TO_CLS = { 105 : FaceId, 106 : Cost }
+    TYPES_TO_CLS = { NFD_MGMT_TYPES["FaceId"] : FaceId, NFD_MGMT_TYPES["Cost"] : Cost }
 
     fields_desc = [
-                    NdnTypeField(129),
+                    NdnTypeField(NFD_MGMT_TYPES["NextHopRecord"]),
                     NdnLenField(),
                     PacketListField("value", [],
                                      next_cls_cb=lambda pkt, lst, cur, remain
@@ -35,10 +42,10 @@ class NextHopRecord(NdnBasePacket):
 
 class NfdFib(NdnBasePacket):
 
-    TYPES_TO_CLS = { TYPES["Name"] : Name, 129 : NextHopRecord }
+    TYPES_TO_CLS = { TYPES["Name"] : Name, NFD_MGMT_TYPES["NextHopRecord"] : NextHopRecord }
 
     fields_desc = [
-                    NdnTypeField(128),
+                    NdnTypeField(NFD_MGMT_TYPES["NfdFib"]),
                     NdnLenField(),
                     PacketListField("value", [],
                                      next_cls_cb=lambda pkt, lst, cur, remain
