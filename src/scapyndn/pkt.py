@@ -215,6 +215,7 @@ class NdnLenField(Field):
                     if fval is None:
                         continue
                     if x is None:
+                        # print("i2m: ", fld, fval)
                         x = fld.i2len(pkt, fval)
                     else:
                         x += fld.i2len(pkt, fval)
@@ -366,7 +367,7 @@ class TypeBlock(BaseBlockPacket):
     fields_desc = [ NdnTypeField("") ]
 
 class NameComponent(Packet):
-    name = "Name Component"
+    name = "Name Component (String)"
 
     fields_desc = [
                     NdnTypeField(TYPES['GenericNameComponent']),
@@ -433,6 +434,62 @@ class NameComponent(Packet):
 class Block(NameComponent):
     name = "Block"
 
+class StrFieldPacket(Packet):
+
+    fields_desc = [ StrField("value", "") ]
+
+class NdnBasePacket(Packet):
+
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+        blk = TypeBlock(remain)
+        if blk.type in types_to_cls:
+            return types_to_cls[blk.type]
+        return default
+
+    def guess_payload_class(self, p):
+        return conf.padding_layer
+
+# Could also apply/extend this class to other Packets
+class _NdnPacketList_metaclass(Packet_metaclass):
+
+    def __new__(cls, name, bases, dct):
+
+        fields_desc = []
+        if "NdnType" not in dct:
+            # Will throw an error that default is not provided,
+            # else we can provide empty string here like TypeBlock
+            fields_desc.append(NdnTypeField())
+        else:
+            fields_desc.append(NdnTypeField(dct["NdnType"]))
+
+        fields_desc.append(NdnLenField())
+
+        if "TypeToCls" in dct:
+            fields_desc.append(
+                PacketListField("value", [],
+                                next_cls_cb=lambda pkt, lst, cur, remain
+                                : pkt.guess_ndn_packets(lst, cur, remain,
+                                                        dct["TypeToCls"],
+                                                        StrFieldPacket),
+                                length_from=lambda pkt: pkt.length)
+            )
+        elif "PktCls" in dct:
+            fields_desc.append(
+                PacketListField("value", [], dct["PktCls"], length_from=lambda pkt: pkt.length)
+            )
+        else:
+            fields_desc.append(
+                PacketListField("value", [], length_from=lambda pkt: pkt.length)
+            )
+
+        dct['fields_desc'] = fields_desc
+
+        return super(_NdnPacketList_metaclass, cls).__new__(cls, name, bases, dct)
+
+class PktListNameComponent(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = TYPES['GenericNameComponent']
+    TypeToCls  = {}
+
 class VersionNameComponent(NameComponent):
     name = "Version Name Component"
 
@@ -462,7 +519,7 @@ class TimestampNameComponent(NameComponent):
                   ]
 
 class NonNegIntNameComponent(NameComponent):
-    name = "Non-Neative Integer Name Component"
+    name = "Non-Negative Integer Name Component"
 
     fields_desc = [
                     NdnTypeField(TYPES['GenericNameComponent']),
@@ -480,7 +537,7 @@ class DoubleNameComponent(NameComponent):
                   ]
 
 # Following two classes given for convenience with length field set to 32:
-class Sha256Digest(NameComponent):
+class Sha256Digest(NdnBasePacket):
     name = "ImplicitSha256DigestComponent"
 
     fields_desc = [
@@ -498,23 +555,34 @@ class ParamsSha256(NameComponent):
                     StrFixedLenField("value", b"", 32)
                   ]
 
-class NdnBasePacket(Packet):
+NAME_URI_TO_NAME_COMPONENT_VALUE_CLS = {}
+def bind_cls_to_name(name_uri, num_after_name, cls):
+    if name_uri not in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS:
+        NAME_URI_TO_NAME_COMPONENT_VALUE_CLS[name_uri] = { num_after_name : cls }
+    else:
+        NAME_URI_TO_NAME_COMPONENT_VALUE_CLS[name_uri][num_after_name] = cls
 
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
-        blk = TypeBlock(remain)
-        if blk.type in types_to_cls:
-            return types_to_cls[blk.type]
-        return default
+def bind_component_cls_dict_to_name(name_uri, num_after_name, types_to_cls):
+    class GuessPktListNameComponent(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+        NdnType   = TYPES['GenericNameComponent']
+        TypeToCls = types_to_cls
+    bind_cls_to_name(name_uri, num_after_name, GuessPktListNameComponent)
 
-    def guess_payload_class(self, p):
-        return conf.padding_layer
+def bind_component_cls_to_name(name_uri, num_after_name, pkt_cls):
+    class PktListNameComponent(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+        NdnType = TYPES['GenericNameComponent']
+        PktCls  = pkt_cls
+    bind_cls_to_name(name_uri, num_after_name, PktListNameComponent)
 
 class Name(NdnBasePacket):
     name = "Name"
 
-    TYPES_TO_CLS = { TYPES["GenericNameComponent"] : NameComponent,
-                     TYPED_NAME_COMP['VersionNameComponent']: VersionNameComponent,
-                     TYPED_NAME_COMP['SegmentNameComponent']: SegmentNameComponent }
+    TYPES_TO_CLS = {
+        TYPES["GenericNameComponent"] : NameComponent,
+        TYPES["ParametersSha256DigestComponent"] : Sha256Digest,
+        TYPED_NAME_COMP['VersionNameComponent']: VersionNameComponent,
+        TYPED_NAME_COMP['SegmentNameComponent']: SegmentNameComponent,
+    }
 
     fields_desc = [
                     NdnTypeField(TYPES['Name']),
@@ -525,14 +593,64 @@ class Name(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
               ]
 
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+        '''
+        Override to decode content within names
+        '''
+        blk = TypeBlock(remain)
+
+        component_list = lst.copy()
+        if cur is not None:
+            component_list.append(cur)
+
+        name_so_far = '/'
+        bound_name = None
+        comp_num_after_prefix = 0
+        for nc in component_list:
+            try:
+                if type(nc.value) == bytes:
+                    name_so_far += nc.value.decode("unicode_escape")
+                elif type(nc.value) == list:
+                    for c in nc.value:
+                        name_so_far += raw(c).decode("unicode_escape")
+
+                if name_so_far in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS:
+                    bound_name = name_so_far
+                elif bound_name is not None:
+                    comp_num_after_prefix += 1
+
+                name_so_far += '/'
+            except Exception as e:
+                # print("nc:", e)
+                # Guess feature available for simple decodable names only
+                pass
+
+        if name_so_far[-1] == "/":
+            name_so_far = name_so_far[:-1]
+
+        if bound_name is not None:
+            if comp_num_after_prefix in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS[bound_name]:
+                return NAME_URI_TO_NAME_COMPONENT_VALUE_CLS[bound_name][comp_num_after_prefix]
+
+        # /localhost/nfd/rib/register/<control-parameters>/<sha256-digest>
+
+        if blk.type in types_to_cls:
+            return types_to_cls[blk.type]
+        return default
+
     def _to_uri(self):
         name_str = "/"
         for f in self.value:
+            # print(f)
+            # TODO: What about list (PacketListField)?
             if isinstance(f.value, bytes):
                 # name_str += NameComponent._unescape(f.value.decode("unicode_escape")) + "/"
                 name_str += f.value.decode("unicode_escape") + "/"
             else:
                 name_str += "{}/".format(f.value)
+
+        if name_str[-1] == "/":
+            name_str = name_str[:-1]
         return name_str
 
     def to_uri(self):
@@ -793,33 +911,6 @@ class RsaSignature(Packet):
 
     fields_desc = [ Raw_ASN1_BIT_STRING("value", b"")  ]
 
-# Could also apply/extend this class to other Packets
-class _NdnPacketList_metaclass(Packet_metaclass):
-
-    def __new__(cls, name, bases, dct):
-
-        fields_desc = []
-        if "NdnType" not in dct:
-            # Will throw an error that default is not provided,
-            # else we can provide empty string here like TypeBlock
-            fields_desc.append(NdnTypeField())
-        else:
-            fields_desc.append(NdnTypeField(dct["NdnType"]))
-
-        fields_desc.append(NdnLenField())
-
-        if "PktCls" not in dct:
-            fields_desc.append(
-                PacketListField("value", [], length_from=lambda pkt: pkt.length)
-            )
-        else:
-            fields_desc.append(
-                PacketListField("value", [], dct["PktCls"], length_from=lambda pkt: pkt.length)
-            )
-        dct['fields_desc'] = fields_desc
-
-        return super(_NdnPacketList_metaclass, cls).__new__(cls, name, bases, dct)
-
 class SignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['SignatureValue']
 
@@ -905,11 +996,16 @@ class Interest(NdnBasePacket):
         return default
 
 NAME_URI_TO_CONTENT_CLS = {}
-def bind_content_to_name(name_uri, content_val_cls):
-    # TODO: if user needs to pass a custom Content class for some reason
+def bind_content_cls_to_data_name(name_uri, content_val_cls):
     class Content(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
         NdnType = TYPES["Content"]
         PktCls  = content_val_cls
+    NAME_URI_TO_CONTENT_CLS[name_uri] = Content
+
+def bind_content_cls_dict_to_data_name(name_uri, type_to_cls):
+    class Content(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+        NdnType   = TYPES["Content"]
+        TypeToCls = type_to_cls
     NAME_URI_TO_CONTENT_CLS[name_uri] = Content
 
 class Data(NdnBasePacket):
@@ -944,14 +1040,19 @@ class Data(NdnBasePacket):
                     if type(mi_pkt) == ContentType and \
                        mi_pkt.value == 2: # Key
                         return SubjectPublicKeyInfoContent
-            # print('what: ', type(cur))
+            # print('what: ', type(cur), cur.value)
             # print('what lst: ', type(lst), lst)
-            for l in lst:
+            for l in lst + [cur]:
                 if not isinstance(l, Name):
                     continue
                 pkt_name = l.to_uri()
+                # pkt_name_comp_list = pkt_name.split("/")
                 # print(pkt_name)
+                # Probably will be a prefix and not an exact match that's why the loop
+                # TODO: Need to return longest prefix match here
+                # TODO: /test/custom will be in /test/custom2/
                 for n in NAME_URI_TO_CONTENT_CLS:
+                    # bound_pkt_name_comp_list = n.split("/")
                     if n in pkt_name:
                        return NAME_URI_TO_CONTENT_CLS[n]
         if blk.type == TYPES["SignatureValue"]:
