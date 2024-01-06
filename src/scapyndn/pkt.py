@@ -358,15 +358,75 @@ class Raw_ASN1_BIT_STRING(StrField):
             s
         )
 
-class BaseBlockPacket(Packet):
-    def guess_payload_class(self, p):
+class NdnBasePacket(Packet):
+
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+        blk = TypeBlock(remain)
+        if blk.type in types_to_cls:
+            return types_to_cls[blk.type]
+        return default
+
+    def guess_payload_class(self, payload):
         return conf.padding_layer
 
-class TypeBlock(BaseBlockPacket):
+    @staticmethod
+    def _unescape(input_str):
+        unescaped = ""
+        i = 0
+        while i < len(input_str):
+            if input_str[i] == "%" and i + 2 < len(input_str):
+                hi = NameComponent._from_hex_char(ord(input_str[i + 1]))
+                lo = NameComponent._from_hex_char(ord(input_str[i + 2]))
+
+                if hi < 0 or lo < 0:
+                    unescaped += input_str[i] + input_str[i + 1] + input_str[i + 2]
+                else:
+                    unescaped += chr(hi << 4 | lo)
+                i += 2
+            else:
+                unescaped += input_str[i]
+            i += 1
+        return unescaped
+
+    #def to_uri(self):
+    #    uri_str = ""
+    #    try:
+    #        fld, ndn_type = self.getfield_and_val("type")
+    #        fld, val = self.getfield_and_val("value")
+    #    except ValueError as e:
+    #        return uri_str
+
+        # ndn::nfd::ControlParameters parameters;
+        # parameters.setName(Name("/test/ndn"));
+        # parameters.setFaceId(0);
+
+        # /localhop/nfd/rib/register/h%10%07%0B%08%04test%08%03ndni%01%00
+
+    #    if ndn_type == TYPES["GenericNameComponent"]:
+    #        if type(val) == bytes:
+    #            uri_str += val.decode("unicode_escape")
+    #    else:
+        #else:
+        #    print(raw(val))
+        #    uri_str += raw(val).decode("unicode_escape")
+        #elif type(val) == int:
+        #    uri_str += str(val)
+        #elif isinstance(val, Packet):
+        #    uri_str += raw(val).decode("unicode_escape")
+    #    elif type(val) == list:
+    #        print("List detected")
+    #        for l in val:
+    #            if isinstance(l, Packet):
+    #                print("Packet detected")
+    #                uri_str += l.to_uri()
+    #    print(uri_str)
+    #    return uri_str
+
+class TypeBlock(NdnBasePacket):
 
     fields_desc = [ NdnTypeField("") ]
 
-class NameComponent(Packet):
+class NameComponent(NdnBasePacket):
     name = "Name Component (String)"
 
     fields_desc = [
@@ -374,9 +434,6 @@ class NameComponent(Packet):
                     NdnLenField(),
                     StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
-
-    def guess_payload_class(self, p):
-        return conf.padding_layer
 
     def show2(self, dump=False, indent=3, lvl="", label_lvl=""):
         return super(NameComponent, self).show2(dump, indent, lvl, label_lvl)
@@ -414,6 +471,21 @@ class NameComponent(Packet):
     def from_escaped_string(input_str):
         return NameComponent(value=input_str)
 
+    @staticmethod
+    def escape(byts):
+        escaped = ""
+        for b in byts:
+            if ((b >= ord("a") and b <= ord("z")) or \
+                (b >= ord("A") and b <= ord("Z")) or \
+                (b >= ord("0") and b <= ord("9")) or \
+                b == "-" or b == "." or \
+                b == "_" or b == "~"):
+                escaped += chr(b)
+            else:
+                escaped += "%"
+                escaped += "{0:02x}".format(b)
+        return escaped
+
     def to_number(self):
         fld, val = self.getfield_and_val("value")
         if self.length == 1:
@@ -431,23 +503,30 @@ class NameComponent(Packet):
         fld, val = self.getfield_and_val("value")
         return struct.unpack(">d", val)[0]
 
+    def to_uri(self):
+        uri_str = ""
+        try:
+            fld, val = self.getfield_and_val("value")
+        except ValueError as e:
+            return uri_str
+
+        if type(val) == bytes:
+            uri_str += val.decode("unicode_escape")
+        elif type(val) == list:
+            for i in val:
+                uri_str += NameComponent.escape(bytes(i))
+        elif type(val) == str:
+            uri_str += val
+        else:
+            uri_str += NameComponent.escape(bytes(val))
+        return uri_str
+
 class Block(NameComponent):
     name = "Block"
 
 class StrFieldPacket(Packet):
 
     fields_desc = [ StrField("value", "") ]
-
-class NdnBasePacket(Packet):
-
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
-        blk = TypeBlock(remain)
-        if blk.type in types_to_cls:
-            return types_to_cls[blk.type]
-        return default
-
-    def guess_payload_class(self, p):
-        return conf.padding_layer
 
 # Could also apply/extend this class to other Packets
 class _NdnPacketList_metaclass(Packet_metaclass):
@@ -563,13 +642,13 @@ def bind_cls_to_name(name_uri, num_after_name, cls):
         NAME_URI_TO_NAME_COMPONENT_VALUE_CLS[name_uri][num_after_name] = cls
 
 def bind_component_cls_dict_to_name(name_uri, num_after_name, types_to_cls):
-    class GuessPktListNameComponent(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    class GuessPktListNameComponent(NameComponent, metaclass=_NdnPacketList_metaclass):
         NdnType   = TYPES['GenericNameComponent']
         TypeToCls = types_to_cls
     bind_cls_to_name(name_uri, num_after_name, GuessPktListNameComponent)
 
 def bind_component_cls_to_name(name_uri, num_after_name, pkt_cls):
-    class PktListNameComponent(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    class PktListNameComponent(NameComponent, metaclass=_NdnPacketList_metaclass):
         NdnType = TYPES['GenericNameComponent']
         PktCls  = pkt_cls
     bind_cls_to_name(name_uri, num_after_name, PktListNameComponent)
@@ -603,27 +682,18 @@ class Name(NdnBasePacket):
         if cur is not None:
             component_list.append(cur)
 
-        name_so_far = '/'
+        name_so_far = "/"
         bound_name = None
         comp_num_after_prefix = 0
         for nc in component_list:
-            try:
-                if type(nc.value) == bytes:
-                    name_so_far += nc.value.decode("unicode_escape")
-                elif type(nc.value) == list:
-                    for c in nc.value:
-                        name_so_far += raw(c).decode("unicode_escape")
+            name_so_far += nc.to_uri()
 
-                if name_so_far in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS:
-                    bound_name = name_so_far
-                elif bound_name is not None:
-                    comp_num_after_prefix += 1
+            if name_so_far in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS:
+                bound_name = name_so_far
+            elif bound_name is not None:
+                comp_num_after_prefix += 1
 
-                name_so_far += '/'
-            except Exception as e:
-                # print("nc:", e)
-                # Guess feature available for simple decodable names only
-                pass
+            name_so_far += '/'
 
         if name_so_far[-1] == "/":
             name_so_far = name_so_far[:-1]
@@ -638,6 +708,7 @@ class Name(NdnBasePacket):
             return types_to_cls[blk.type]
         return default
 
+    # TODO: Use NC's to_uri()
     def _to_uri(self):
         name_str = "/"
         for f in self.value:
@@ -656,7 +727,12 @@ class Name(NdnBasePacket):
     def to_uri(self):
         return self.__class__(raw(self))._to_uri()
 
-class Nonce(BaseBlockPacket):
+    #def is_prefix_of(self, other):
+    #    if type(other) == str:
+    #        component_list = other.split("/")
+    #        for nc in self.value:
+
+class Nonce(NdnBasePacket):
     name = "Nonce"
 
     fields_desc = [
@@ -665,7 +741,7 @@ class Nonce(BaseBlockPacket):
                     XIntField("value", 2)
                   ]
 
-class InterestLifetime(BaseBlockPacket):
+class InterestLifetime(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['InterestLifetime']),
@@ -673,7 +749,7 @@ class InterestLifetime(BaseBlockPacket):
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
-class ForwardingHint(BaseBlockPacket):
+class ForwardingHint(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['ForwardingHint']),
@@ -681,11 +757,11 @@ class ForwardingHint(BaseBlockPacket):
                     PacketLenField("value", "", Name, length_from=lambda pkt: pkt.length)
                   ]
 
-class CanBePrefix(BaseBlockPacket):
+class CanBePrefix(NdnBasePacket):
 
     fields_desc = [ NdnTypeField(TYPES['CanBePrefix']), NdnZeroLenField() ]
 
-class MustBeFresh(BaseBlockPacket):
+class MustBeFresh(NdnBasePacket):
 
     fields_desc = [ NdnTypeField(TYPES['MustBeFresh']), NdnZeroLenField() ]
 
@@ -705,7 +781,7 @@ class ApplicationParameters(NdnBasePacket):
                     StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
-class ContentType(BaseBlockPacket):
+class ContentType(NdnBasePacket):
 
     CONTENT_TYPES = { 0: "Blob", 1: "Link", 2: "Key", 3: "Nack",
                       4: "Manifest", 5: "PrefixAnn", 6: "KiteAck" }
@@ -716,7 +792,7 @@ class ContentType(BaseBlockPacket):
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length, enum=CONTENT_TYPES)
                   ]
 
-class FreshnessPeriod(BaseBlockPacket):
+class FreshnessPeriod(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['FreshnessPeriod']),
@@ -790,7 +866,7 @@ class MetaInfo(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-class SignatureType(BaseBlockPacket):
+class SignatureType(NdnBasePacket):
 
     SIG_TYPE_VALUES = { 0 : "DigestSha256", 1 : "SignatureSha256WithRsa",
                         3 : "SignatureSha256WithEcdsa", 4 : "SignatureHmacWithSha256" }
@@ -801,7 +877,7 @@ class SignatureType(BaseBlockPacket):
                     NonNegativeIntField("value", "", length_from=lambda pkt: pkt.length, enum=SIG_TYPE_VALUES)
                   ]
 
-class KeyDigest(BaseBlockPacket):
+class KeyDigest(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['KeyDigest']),
@@ -825,7 +901,7 @@ class KeyLocator(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-class SignatureNonce(BaseBlockPacket):
+class SignatureNonce(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['SignatureNonce']),
@@ -833,7 +909,7 @@ class SignatureNonce(BaseBlockPacket):
                     StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
-class SignatureTime(BaseBlockPacket):
+class SignatureTime(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['SignatureTime']),
@@ -842,7 +918,7 @@ class SignatureTime(BaseBlockPacket):
                     TimestampIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
-class SignatureSeqNum(BaseBlockPacket):
+class SignatureSeqNum(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['SignatureSeqNum']),
@@ -850,7 +926,7 @@ class SignatureSeqNum(BaseBlockPacket):
                     NonNegativeIntField("value", 0)
                   ]
 
-class NotBefore(BaseBlockPacket):
+class NotBefore(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['NotBefore']),
@@ -858,7 +934,7 @@ class NotBefore(BaseBlockPacket):
                     StrLenField("value", b"", length_from=lambda pkt: pkt.length)
                   ]
 
-class NotAfter(BaseBlockPacket):
+class NotAfter(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['NotAfter']),
@@ -911,18 +987,18 @@ class RsaSignature(Packet):
 
     fields_desc = [ Raw_ASN1_BIT_STRING("value", b"")  ]
 
-class SignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
+class SignatureValue(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['SignatureValue']
 
-class ECDSASignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
+class ECDSASignatureValue(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['SignatureValue']
     PktCls  = ECDSASignature
 
-class DigestSha256SignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
+class DigestSha256SignatureValue(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['SignatureValue']
     PktCls  = DigestSha256
 
-class RsaSignatureValue(BaseBlockPacket, metaclass=_NdnPacketList_metaclass):
+class RsaSignatureValue(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['SignatureValue']
     PktCls  = RsaSignature
 
@@ -1046,13 +1122,15 @@ class Data(NdnBasePacket):
                 if not isinstance(l, Name):
                     continue
                 pkt_name = l.to_uri()
+                pkt_name += "/"
                 # pkt_name_comp_list = pkt_name.split("/")
                 # print(pkt_name)
                 # Probably will be a prefix and not an exact match that's why the loop
                 # TODO: Need to return longest prefix match here
-                # TODO: /test/custom will be in /test/custom2/
+                # TODO: /test/custom will be in /test/custom2
                 for n in NAME_URI_TO_CONTENT_CLS:
                     # bound_pkt_name_comp_list = n.split("/")
+                    # if n + "/" in pkt_name:
                     if n in pkt_name:
                        return NAME_URI_TO_CONTENT_CLS[n]
         if blk.type == TYPES["SignatureValue"]:
@@ -1069,7 +1147,7 @@ class Data(NdnBasePacket):
 class Certificate(Data):
     name = "Certificate"
 
-class LinkContent(BaseBlockPacket):
+class LinkContent(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES["Content"]),
@@ -1100,7 +1178,7 @@ class LinkObject(Data):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-class Sequence(BaseBlockPacket):
+class Sequence(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(LP_TYPES['Sequence']),
@@ -1108,7 +1186,7 @@ class Sequence(BaseBlockPacket):
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
-class FragIndex(BaseBlockPacket):
+class FragIndex(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(LP_TYPES['FragIndex']),
@@ -1116,7 +1194,7 @@ class FragIndex(BaseBlockPacket):
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
-class FragCount(BaseBlockPacket):
+class FragCount(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(LP_TYPES['FragCount']),
@@ -1124,7 +1202,7 @@ class FragCount(BaseBlockPacket):
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
-class NackReason(BaseBlockPacket):
+class NackReason(NdnBasePacket):
 
     NACK_REASONS = {
                        0 : "None",
@@ -1139,7 +1217,7 @@ class NackReason(BaseBlockPacket):
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length, enum=NACK_REASONS)
                   ]
 
-class Nack(BaseBlockPacket):
+class Nack(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(LP_TYPES['Nack']),
