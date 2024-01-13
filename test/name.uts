@@ -1,0 +1,29 @@
+# -*- mode: python -*-
+
+% Regression tests for Scapy NDN NameComponent
+
+############
+############
++ Tests on NDN Name
+
+= Simple Name tests
+
+from scapyndn.pkt import *
+from scapyndn.contents.nfd import *
+
+import datetime
+
+#= Control Params in NameComponent
+
+n = Name(b'\x07_\x08\tlocalhost\x08\x03nfd\x08\x03rib\x08\x08register\x08\x1ch\x1a\x07\x0b\x08\x04test\x08\x03ndni\x02\x01\x03o\x01\xffj\x01dl\x01\x01\x02 \x11\x05\xc4\x8b6wT\xd2\x1b\xab\xe8l\xbb\x10rI\xe4\x17\x07?\xa9k\x03\x96\xc2\x17\xf7UD\xdf G')
+
+assert n.to_uri() == "/localhost/nfd/rib/register/h%1a%07%0b%08%04test%08%03ndni%02%01%03o%01%ffj%01dl%01%01/%11%05%c4%8b6wT%d2%1b%ab%e8l%bb%10rI%e4%17%07%3f%a9k%03%96%c2%17%f7UD%df%20G"
+
+n.show2()
+
+assert "GuessPktListNameComponent" in n
+assert type(n["GuessPktListNameComponent"].value) == list
+assert type(n["GuessPktListNameComponent"].value[0]) == ControlParameters
+
+assert type(n["GuessPktListNameComponent"].value[0].value) == list
+assert type(n["GuessPktListNameComponent"].value[0].value[0]) == Name

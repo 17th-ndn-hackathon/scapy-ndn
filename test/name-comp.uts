@@ -1,0 +1,63 @@
+# -*- mode: python -*-
+
+% Regression tests for Scapy NDN NameComponent
+
+############
+############
++ Tests on NDN basic fields
+
+= Simple Name Component tests
+
+from scapyndn.pkt import *
+from scapyndn.contents.nfd import *
+
+import datetime
+
+nc = NameComponent(value=str("ndn-cxx"))
+assert nc.type == TYPES["GenericNameComponent"]
+# Not calculated yet
+assert nc.length == None
+nc.show2()
+assert nc.value == b"ndn-cxx"
+print(nc.to_uri())
+assert nc.to_uri() == "ndn-cxx"
+
+rnc = raw(nc)
+bnc = NameComponent(rnc)
+assert bnc.length == 0x7
+assert len(nc) == 9
+assert rnc == b"\x08\x07\x6E\x64\x6E\x2D\x63\x78\x78"
+# bnc.show2()
+
+# Different type than default
+nc = NameComponent(type=TYPES["ImplicitSha256DigestComponent"], value="ndn-cxx")
+assert nc.type == TYPES["ImplicitSha256DigestComponent"]
+nc = NameComponent(raw(nc))
+assert nc.length == 7
+assert nc.value == b"ndn-cxx"
+
+# Zero length Name Component
+
+nc = NameComponent(value="")
+rnc = raw(nc)
+print(rnc)
+nc = NameComponent(rnc)
+# nc.show2()
+assert nc.length == None
+assert len(nc.value) == 0
+assert rnc == b"\x08"
+
+nc = NameComponent(b"\x08\x00")
+assert nc.type == TYPES["GenericNameComponent"]
+assert nc.length == 0
+assert len(nc.value) == 0
+
+#= Timestamp Name Component tests
+
+n = TimestampNameComponent(value=datetime.datetime(2009, 12, 22))
+n.show2()
+
+#= Control Params in NameComponent
+
+nc = NameComponent(b'\x08\x1ch\x1a\x07\x0b\x08\x04test\x08\x03ndni\x02\x01\x03o\x01\xffj\x01dl\x01\x01')
+nc.show2()

@@ -388,40 +388,6 @@ class NdnBasePacket(Packet):
             i += 1
         return unescaped
 
-    #def to_uri(self):
-    #    uri_str = ""
-    #    try:
-    #        fld, ndn_type = self.getfield_and_val("type")
-    #        fld, val = self.getfield_and_val("value")
-    #    except ValueError as e:
-    #        return uri_str
-
-        # ndn::nfd::ControlParameters parameters;
-        # parameters.setName(Name("/test/ndn"));
-        # parameters.setFaceId(0);
-
-        # /localhop/nfd/rib/register/h%10%07%0B%08%04test%08%03ndni%01%00
-
-    #    if ndn_type == TYPES["GenericNameComponent"]:
-    #        if type(val) == bytes:
-    #            uri_str += val.decode("unicode_escape")
-    #    else:
-        #else:
-        #    print(raw(val))
-        #    uri_str += raw(val).decode("unicode_escape")
-        #elif type(val) == int:
-        #    uri_str += str(val)
-        #elif isinstance(val, Packet):
-        #    uri_str += raw(val).decode("unicode_escape")
-    #    elif type(val) == list:
-    #        print("List detected")
-    #        for l in val:
-    #            if isinstance(l, Packet):
-    #                print("Packet detected")
-    #                uri_str += l.to_uri()
-    #    print(uri_str)
-    #    return uri_str
-
 class TypeBlock(NdnBasePacket):
 
     fields_desc = [ NdnTypeField("") ]
@@ -432,7 +398,7 @@ class NameComponent(NdnBasePacket):
     fields_desc = [
                     NdnTypeField(TYPES['GenericNameComponent']),
                     NdnLenField(),
-                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
+                    StrLenField("value", "", length_from=lambda pkt: pkt.length)
                   ]
 
     def show2(self, dump=False, indent=3, lvl="", label_lvl=""):
@@ -511,7 +477,13 @@ class NameComponent(NdnBasePacket):
             return uri_str
 
         if type(val) == bytes:
-            uri_str += val.decode("unicode_escape")
+            try:
+                val = val.decode()
+            except Exception as e:
+                pass
+
+        if type(val) == bytes:
+            uri_str += NameComponent.escape(val)
         elif type(val) == list:
             for i in val:
                 uri_str += NameComponent.escape(bytes(i))
@@ -616,7 +588,7 @@ class DoubleNameComponent(NameComponent):
                   ]
 
 # Following two classes given for convenience with length field set to 32:
-class Sha256Digest(NdnBasePacket):
+class Sha256Digest(NameComponent):
     name = "ImplicitSha256DigestComponent"
 
     fields_desc = [
@@ -685,7 +657,7 @@ class Name(NdnBasePacket):
         name_so_far = "/"
         bound_name = None
         comp_num_after_prefix = 0
-        for nc in component_list:
+        for idx, nc in enumerate(component_list):
             name_so_far += nc.to_uri()
 
             if name_so_far in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS:
@@ -693,10 +665,8 @@ class Name(NdnBasePacket):
             elif bound_name is not None:
                 comp_num_after_prefix += 1
 
-            name_so_far += '/'
-
-        if name_so_far[-1] == "/":
-            name_so_far = name_so_far[:-1]
+            if idx != len(component_list) - 1:
+                name_so_far += '/'
 
         if bound_name is not None:
             if comp_num_after_prefix in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS[bound_name]:
@@ -708,20 +678,12 @@ class Name(NdnBasePacket):
             return types_to_cls[blk.type]
         return default
 
-    # TODO: Use NC's to_uri()
     def _to_uri(self):
         name_str = "/"
-        for f in self.value:
-            # print(f)
-            # TODO: What about list (PacketListField)?
-            if isinstance(f.value, bytes):
-                # name_str += NameComponent._unescape(f.value.decode("unicode_escape")) + "/"
-                name_str += f.value.decode("unicode_escape") + "/"
-            else:
-                name_str += "{}/".format(f.value)
-
-        if name_str[-1] == "/":
-            name_str = name_str[:-1]
+        for idx, f in enumerate(self.value):
+            name_str += f.to_uri()
+            if idx != len(self.value) - 1:
+                name_str += "/"
         return name_str
 
     def to_uri(self):
