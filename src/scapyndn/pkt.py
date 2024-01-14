@@ -36,12 +36,19 @@ MARKER_TYPES = {
                }
 
 TYPES = {
-          "ImplicitSha256DigestComponent"  : 1,
-          "ParametersSha256DigestComponent": 2,
           "Interest"                       : 5,
           "Data"                           : 6,
+
           "Name"                           : 7,
           "GenericNameComponent"           : 8,
+          "ImplicitSha256DigestComponent"  : 1,
+          "ParametersSha256DigestComponent": 2,
+          "SegmentNameComponent"           : 50, # 0x32
+          "ByteOffsetNameComponent"        : 52, # 0x34
+          "VersionNameComponent"           : 54, # 0x36
+          "TimestampNameComponent"         : 56, # 0x38
+          "SequenceNumNameComponent"       : 58, # 0x3A
+
           "CanBePrefix"                    : 33, # 0x21
           "MustBeFresh"                    : 18, # 0x12
           "ForwardingHint"                 : 30, # 0x1E
@@ -69,31 +76,18 @@ TYPES = {
           "NotAfter"                       : 255, # 0xFF
         }
 
-TYPED_NAME_COMP = {
-          "SegmentNameComponent"    : 50, # 0x32
-          "ByteOffsetNameComponent" : 52, # 0x34
-          "VersionNameComponent"    : 54, # 0x36
-          "TimestampNameComponent"  : 56, # 0x38
-          "SequenceNumNameComponent": 58, # 0x3A
-        }
-
 NUM_TO_TYPES = {v: k for k, v in TYPES.items()}
-
-TYPE_NUM_TO_CLASS = {}
-
-for k, v in TYPES.items():
-    if k not in TYPED_NAME_COMP:
-        NUM_TO_TYPES[k] = v
 
 COMP_TYPES = {
           "sha256digest" : TYPES["ImplicitSha256DigestComponent"],
           "params-sha256": TYPES["ParametersSha256DigestComponent"],
-          "seg"          : TYPED_NAME_COMP["SegmentNameComponent"],
-          "off"          : TYPED_NAME_COMP["ByteOffsetNameComponent"],
-          "v"            : TYPED_NAME_COMP["VersionNameComponent"],
-          "t"            : TYPED_NAME_COMP["TimestampNameComponent"],
-          "seq"          : TYPED_NAME_COMP["SequenceNumNameComponent"],
+          "seg"          : TYPES["SegmentNameComponent"],
+          "off"          : TYPES["ByteOffsetNameComponent"],
+          "v"            : TYPES["VersionNameComponent"],
+          "t"            : TYPES["TimestampNameComponent"],
+          "seq"          : TYPES["SequenceNumNameComponent"],
         }
+NUM_TO_TYPED_STR = {v: k for k, v in COMP_TYPES.items()}
 
 LP_TYPES = {
              "LpPacket"           : 100, # 0x64
@@ -114,6 +108,16 @@ LP_TYPES = {
              "NonDiscovery"       : 844, # 0x34C
              "PrefixAnnouncement" : 848, # 0x350
            }
+
+def encode_number_ndn(val):
+    if val < 253:
+        return struct.pack(">B", val)
+    elif val < 65536:
+        return b"\xFD" + struct.pack(">H", val)
+    elif val < 4294967296:
+        return b"\xFE" + struct.pack(">L", val)
+    else:
+        return b"\xFF" + struct.pack(">Q", val)
 
 class NonNegativeIntField(Field):
     __slots__ = ["length_from", "enum"]
@@ -211,9 +215,10 @@ class NdnLenField(Field):
             for field in pkt.fields_desc:
                 if field.name != "type" and field.name != "length":
                     fld, fval = pkt.getfield_and_val(field.name)
-                    #print("fld, fval: ", fld, fval)
+                    # print("fld, fval: ", fld, fval)
                     if fval is None:
                         continue
+
                     if x is None:
                         # print("i2m: ", fld, fval)
                         x = fld.i2len(pkt, fval)
@@ -227,7 +232,6 @@ class NdnLenField(Field):
 
     def addfield(self, pkt, s, val):
         x = self.i2m(pkt, val)
-        #print(x)
         if not x:
             return s
 
@@ -453,7 +457,7 @@ class NameComponent(NdnBasePacket):
         return escaped
 
     def to_number(self):
-        fld, val = self.getfield_and_val("value")
+        val = self.getfieldval("value")
         if self.length == 1:
             return struct.unpack(">B", val)[0]
         elif self.length == 2:
@@ -466,13 +470,13 @@ class NameComponent(NdnBasePacket):
             return -1
 
     def to_double(self):
-        fld, val = self.getfield_and_val("value")
+        val = self.getfieldval("value")
         return struct.unpack(">d", val)[0]
 
     def to_uri(self):
         uri_str = ""
         try:
-            fld, val = self.getfield_and_val("value")
+            val = self.getfieldval("value")
         except ValueError as e:
             return uri_str
 
@@ -489,6 +493,14 @@ class NameComponent(NdnBasePacket):
                 uri_str += NameComponent.escape(bytes(i))
         elif type(val) == str:
             uri_str += val
+        elif type(val) == int:
+            nc_type = self.getfieldval("type")
+            if nc_type in NUM_TO_TYPED_STR:
+                uri_str += "{}/{}".format(NUM_TO_TYPED_STR[nc_type], val)
+            else:
+                uri_str += NameComponent.escape(encode_number_ndn(val))
+        elif type(val) == float:
+            uri_str += NameComponent.escape(struct.pack(">d", val))
         else:
             uri_str += NameComponent.escape(bytes(val))
         return uri_str
@@ -545,7 +557,7 @@ class VersionNameComponent(NameComponent):
     name = "Version Name Component"
 
     fields_desc = [
-                    NdnTypeField(TYPED_NAME_COMP['VersionNameComponent']),
+                    NdnTypeField(TYPES['VersionNameComponent']),
                     NdnLenField(),
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
@@ -554,7 +566,7 @@ class SegmentNameComponent(NameComponent):
     name = "Segment Name Component"
 
     fields_desc = [
-                    NdnTypeField(TYPED_NAME_COMP['SegmentNameComponent']),
+                    NdnTypeField(TYPES['SegmentNameComponent']),
                     NdnLenField(),
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
@@ -564,7 +576,7 @@ class TimestampNameComponent(NameComponent):
     name = "Timestamp Name Component"
 
     fields_desc = [
-                    NdnTypeField(TYPED_NAME_COMP['TimestampNameComponent']),
+                    NdnTypeField(TYPES['TimestampNameComponent']),
                     NdnLenField(),
                     TimestampIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
@@ -631,8 +643,8 @@ class Name(NdnBasePacket):
     TYPES_TO_CLS = {
         TYPES["GenericNameComponent"] : NameComponent,
         TYPES["ParametersSha256DigestComponent"] : Sha256Digest,
-        TYPED_NAME_COMP['VersionNameComponent']: VersionNameComponent,
-        TYPED_NAME_COMP['SegmentNameComponent']: SegmentNameComponent,
+        TYPES['VersionNameComponent']: VersionNameComponent,
+        TYPES['SegmentNameComponent']: SegmentNameComponent,
     }
 
     fields_desc = [
@@ -659,6 +671,7 @@ class Name(NdnBasePacket):
         comp_num_after_prefix = 0
         for idx, nc in enumerate(component_list):
             name_so_far += nc.to_uri()
+            # print(name_so_far)
 
             if name_so_far in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS:
                 bound_name = name_so_far
@@ -689,10 +702,17 @@ class Name(NdnBasePacket):
     def to_uri(self):
         return self.__class__(raw(self))._to_uri()
 
-    #def is_prefix_of(self, other):
-    #    if type(other) == str:
-    #        component_list = other.split("/")
-    #        for nc in self.value:
+    def is_prefix_of(self, other):
+        if type(other) == str:
+            other_component_list = other[1:].split("/")
+            if len(other_component_list) > len(self.value):
+                return False, len(other_component_list)
+
+            for idx, other_comp in enumerate(other_component_list):
+                if other_comp != self.value[idx].to_uri():
+                    return False, len(other_component_list)
+            return True, len(other_component_list)
+        return False, 0
 
 class Nonce(NdnBasePacket):
     name = "Nonce"
@@ -765,8 +785,8 @@ class FreshnessPeriod(NdnBasePacket):
 class FinalBlockId(NdnBasePacket):
 
     TYPES_TO_CLS = { TYPES["GenericNameComponent"] : NameComponent,
-                     TYPED_NAME_COMP['VersionNameComponent']: VersionNameComponent,
-                     TYPED_NAME_COMP['SegmentNameComponent']: SegmentNameComponent }
+                     TYPES['VersionNameComponent']: VersionNameComponent,
+                     TYPES['SegmentNameComponent']: SegmentNameComponent }
 
     fields_desc = [
                     NdnTypeField(TYPES['FinalBlockId']),
@@ -1083,18 +1103,21 @@ class Data(NdnBasePacket):
             for l in lst + [cur]:
                 if not isinstance(l, Name):
                     continue
-                pkt_name = l.to_uri()
-                pkt_name += "/"
-                # pkt_name_comp_list = pkt_name.split("/")
-                # print(pkt_name)
-                # Probably will be a prefix and not an exact match that's why the loop
-                # TODO: Need to return longest prefix match here
-                # TODO: /test/custom will be in /test/custom2
+
+                # Loop since Probably will be a prefix
+                cls_to_return = None
+                longest_prefix_len = 0
                 for n in NAME_URI_TO_CONTENT_CLS:
-                    # bound_pkt_name_comp_list = n.split("/")
-                    # if n + "/" in pkt_name:
-                    if n in pkt_name:
-                       return NAME_URI_TO_CONTENT_CLS[n]
+                    is_prefix, n_num_comp = l.is_prefix_of(n)
+                    # print(n, l.to_uri(), is_prefix, n_num_comp)
+
+                    if is_prefix is True:
+                        if n_num_comp > longest_prefix_len:
+                            longest_prefix_len = n_num_comp
+                            cls_to_return = NAME_URI_TO_CONTENT_CLS[n]
+
+                if cls_to_return is not None:
+                    return cls_to_return
         if blk.type == TYPES["SignatureValue"]:
             if type(cur) == SignatureInfo:
                 sigtype = cur["SignatureType"].value

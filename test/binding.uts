@@ -1,0 +1,86 @@
+
+# -*- mode: python -*-
+% Regression tests for binding name/content to name 
+
+############
+############
++ Bind name/content
+
+= Non-TLV content bound to name
+
+from scapy.all import *
+from scapyndn.pkt import *
+import datetime
+
+d = Data(value=
+               Name(
+                    value=NameComponent(value="test") / NameComponent(value="custom")
+               ) /
+               Content(
+                    value=IP() / TCP()
+               )
+    )
+
+d = Data(raw(d))
+# d.show2()
+assert "Content" in d
+assert "Raw" in d["Content"].value[0]
+
+bind_content_cls_to_data_name("/test/custom", IP)
+
+d = Data(raw(d))
+d.show2()
+assert "Content" in d
+assert "IP" in d["Content"].value[0]
+assert "TCP" in d["Content"].value[0]["IP"]
+
+#= TLV content bound to name
+
+d = Data(value=
+               Name(
+                    value=NameComponent(value="test") / NameComponent(value="custom")
+               ) /
+               Content(
+                    value=NameComponent(value="what") / TimestampNameComponent(value=datetime.datetime(2009, 12, 22))
+               )
+    )
+d = Data(raw(d))
+# d.show2()
+assert "Content" in d
+assert "Raw" in d["Content"].value[0]
+
+bind_content_cls_to_data_name("/test/custom", NameComponent)
+
+d = Data(raw(d))
+d.show2()
+
+assert "Content" in d
+assert len(d["Content"].value) == 2
+for val in d["Content"].value:
+    assert "NameComponent" in val
+
+= TLV content dict bound to name
+
+d = Data(value=
+               Name(
+                    value=NameComponent(value="test") / NameComponent(value="custom2") / NameComponent(value="dict")
+               ) /
+               Content(
+                    value=NameComponent(value="what") / TimestampNameComponent(value=datetime.datetime(2009, 12, 22))
+               )
+    )
+d = Data(raw(d))
+d.show2()
+assert "Content" in d
+assert len(d["Content"].value) == 1
+assert type(d["Content"].value[0]) == Raw
+
+bind_content_cls_dict_to_data_name("/test/custom2/dict",
+                                   { TYPES["GenericNameComponent"] : NameComponent,
+                                     TYPED_NAME_COMP["TimestampNameComponent"] : TimestampNameComponent })
+d = Data(raw(d))
+d.show2()
+assert "Content" in d
+assert len(d["Content"].value) == 2
+assert NameComponent in d["Content"].value[0]
+assert TimestampNameComponent in d["Content"].value[1]

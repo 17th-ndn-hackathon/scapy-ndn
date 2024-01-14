@@ -61,3 +61,12 @@ n.show2()
 
 nc = NameComponent(b'\x08\x1ch\x1a\x07\x0b\x08\x04test\x08\x03ndni\x02\x01\x03o\x01\xffj\x01dl\x01\x01')
 nc.show2()
+
+
+#= To number/double uri
+
+nc = NonNegIntNameComponent(value=100)
+assert nc.to_uri() == "d"
+
+nc = DoubleNameComponent(value=100.2)
+assert nc.to_uri() == "%40Y%0c%cc%cc%cc%cc%cd"
