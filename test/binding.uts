@@ -77,7 +77,7 @@ assert type(d["Content"].value[0]) == Raw
 
 bind_content_cls_dict_to_data_name("/test/custom2/dict",
                                    { TYPES["GenericNameComponent"] : NameComponent,
-                                     TYPED_NAME_COMP["TimestampNameComponent"] : TimestampNameComponent })
+                                     TYPES["TimestampNameComponent"] : TimestampNameComponent })
 d = Data(raw(d))
 d.show2()
 assert "Content" in d
