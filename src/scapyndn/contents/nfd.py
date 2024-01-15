@@ -2,7 +2,7 @@
 from scapy.all import PacketListField, StrLenField
 from scapyndn.pkt import NdnTypeField, NdnLenField, NonNegativeIntField, \
                          NdnBasePacket, Name, TYPES, \
-                         bind_content_cls_to_data_name, bind_component_cls_dict_to_name
+                         bind_content_cls_to_data_name, bind_component_cls_dict_to_name, NameComponent
 
 NFD_MGMT_TYPES = {
     "FaceId": 105,
@@ -100,14 +100,14 @@ class Cost(NdnBasePacket):
     fields_desc = [
         NdnTypeField(CONTROL_CMD_TYPES["Cost"]),
         NdnLenField(),
-        StrLenField("value", b"", length_from=lambda pkt: pkt.length)
+        NonNegativeIntField("value", b"", length_from=lambda pkt: pkt.length)
     ]
 
 class Flags(NdnBasePacket):
     fields_desc = [
         NdnTypeField(CONTROL_CMD_TYPES["Flags"]),
         NdnLenField(),
-        StrLenField("value", b"", length_from=lambda pkt: pkt.length)
+        NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
     ]
 
 class ControlParameters(NdnBasePacket):
