@@ -192,26 +192,29 @@ class NonNegativeIntField(Field):
         if self.enum and x in self.enum:
             return "{} [{}]".format(x, self.enum[x])
         else:
-            return x
+            return "{0} (0x{0:02X})".format(x)
 
 class TimestampIntField(NonNegativeIntField):
 
     def addfield(self, pkt, s, val):
         if isinstance(val, datetime):
-            val = int((val - datetime(1970, 1, 1)).total_seconds() * 1000000)
-            return super(TimestampIntField, self).addfield(pkt, s, val)
-        return s
+            val = int(val.timestamp() * 1000)
+        return super(TimestampIntField, self).addfield(pkt, s, val)
 
     def i2len(self, pkt, x):
         if isinstance(x, datetime):
-            x = int((x - datetime(1970, 1, 1)).total_seconds() * 1000000)
-            return super(TimestampIntField, self).i2len(pkt, x)
-        return 1
+            x = int(x.timestamp() * 1000)
+        return super(TimestampIntField, self).i2len(pkt, x)
 
     def i2repr(self, pkt, x):
         if x is None:
             return ""
-        return "{} [{}]".format(x, datetime(1970, 1, 1) + timedelta(microseconds=x))
+
+        if isinstance(x, int):
+            x_dt = datetime.fromtimestamp(x / 1000)
+            return "{} [{}]".format(x, x_dt)
+
+        return x
 
 class NdnLenField(Field):
 
@@ -250,6 +253,7 @@ class NdnLenField(Field):
                     else:
                         x += fld_len
 
+        # Zero-length
         if x is None:
             x = 0
 
@@ -257,7 +261,8 @@ class NdnLenField(Field):
 
     def addfield(self, pkt, s, val):
         x = self.i2m(pkt, val)
-        if not x:
+
+        if x is None:
             return s
 
         if x < 253:
@@ -593,8 +598,7 @@ class VersionNameComponent(NameComponent):
     fields_desc = [
                     NdnTypeField(TYPES['VersionNameComponent']),
                     NdnLenField(),
-                    # NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                    NdnStrLenField("value", "", length_from=lambda pkt: pkt.length)
+                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
 class SegmentNameComponent(NameComponent):
@@ -931,8 +935,7 @@ class SignatureTime(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES['SignatureTime']),
-                    NdnLenField(default=4),
-                    # NonNegativeIntField("value", 0)
+                    NdnLenField(),
                     TimestampIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 

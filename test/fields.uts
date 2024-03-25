@@ -8,12 +8,12 @@
 = Ndn Length Field tests
 
 from scapyndn.pkt import \
-    NdnLenField, NameComponent, Sha256Digest, TYPES, COMP_TYPES, \
+    NdnLenField, NameComponent, ImplicitSha256DigestComponent, TYPES, COMP_TYPES, \
     Interest, Name, Nonce, DoubleNameComponent, \
     NonNegIntNameComponent, VersionNameComponent
 
-# Empty
-assert NdnLenField().addfield(Raw(""), b"\x08", None) == b"\x08"
+# Empty (Zero-length field)
+assert NdnLenField().addfield(Raw(""), b"\x08", None) == b"\x08\x00"
 assert NdnLenField().addfield(None, b"", None) == b""
 
 # Already defined length
@@ -84,9 +84,17 @@ bnc = VersionNameComponent(rnc)
 assert bnc.type == COMP_TYPES["v"]
 assert rnc == b"\x36\x01\x14"
 
-nc = Sha256Digest(value="28bad4b5275bd392dbb670c75cf0b66f13f7942b21e80f55c0e86b374753a548")
+
+nc = VersionNameComponent(value=255)
 rnc = raw(nc)
-bnc = Sha256Digest(rnc)
+bnc = VersionNameComponent(rnc)
+bnc.show2()
+assert bnc.type == COMP_TYPES["v"]
+assert rnc == b"\x36\x01\xFF"
+
+nc = ImplicitSha256DigestComponent(value="28bad4b5275bd392dbb670c75cf0b66f13f7942b21e80f55c0e86b374753a548")
+rnc = raw(nc)
+bnc = ImplicitSha256DigestComponent(rnc)
 assert bnc.type == COMP_TYPES["sha256digest"]
 
 = Double Name Component Tests

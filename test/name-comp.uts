@@ -43,9 +43,9 @@ rnc = raw(nc)
 print(rnc)
 nc = NameComponent(rnc)
 # nc.show2()
-assert nc.length == None
+assert nc.length == 0
 assert len(nc.value) == 0
-assert rnc == b"\x08"
+assert rnc == b"\x08\x00"
 
 nc = NameComponent(b"\x08\x00")
 assert nc.type == TYPES["GenericNameComponent"]
@@ -55,6 +55,11 @@ assert len(nc.value) == 0
 #= Timestamp Name Component tests
 
 n = TimestampNameComponent(value=datetime.datetime(2009, 12, 22))
+n = TimestampNameComponent(raw(n))
+assert n.value == 1261468800000
+n.show2()
+
+n = TimestampNameComponent(value=1702253977152)
 n.show2()
 
 #= Control Params in NameComponent
