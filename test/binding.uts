@@ -38,18 +38,18 @@ assert "TCP" in d["Content"].value[0]["IP"]
 
 d = Data(value=
                Name(
-                    value=NameComponent(value="test") / NameComponent(value="custom")
+                    value=NameComponent(value="test") / NameComponent(value="custom1")
                ) /
                Content(
                     value=NameComponent(value="what") / TimestampNameComponent(value=datetime.datetime(2009, 12, 22))
                )
     )
 d = Data(raw(d))
-# d.show2()
+d.show2()
 assert "Content" in d
 assert "Raw" in d["Content"].value[0]
 
-bind_content_cls_to_data_name("/test/custom", NameComponent)
+bind_content_cls_to_data_name("/test/custom1", NameComponent)
 
 d = Data(raw(d))
 d.show2()
