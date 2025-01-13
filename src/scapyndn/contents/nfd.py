@@ -1,8 +1,180 @@
 
 from scapy.all import PacketListField, StrLenField
 from scapyndn.pkt import NdnTypeField, NdnLenField, NonNegativeIntField, \
-                         NdnBasePacket, Name, TYPES, \
-                         bind_content_cls_to_data_name, bind_component_cls_dict_to_name, NameComponent
+    NdnBasePacket, Name, TYPES, \
+    bind_content_cls_to_data_name, bind_content_cls_dict_to_data_name, \
+    bind_component_cls_dict_to_name, NameComponent, \
+    TimestampNameComponent, NonNegIntNameComponent, TimestampIntField
+
+NFD_GENERAL_DATASETS_CLS_TO_TYPE = {
+    "NfdVersion"           : 128,
+    "StartTimestamp"       : 129,
+    "CurrentTimestamp"     : 130,
+    "NNameTreeEntries"     : 131,
+    "NFibEntries"          : 132,
+    "NPitEntries"          : 133,
+    "NMeasurementsEntries" : 134,
+    "NCsEntries"           : 135,
+    "NInInterests"         : 144,
+    "NInData"              : 145,
+    "NInNacks"             : 151,
+    "NOutInterests"        : 146,
+    "NOutData"             : 147,
+    "NOutNacks"            : 152,
+    "NSatisfiedInterests"  : 153,
+    "NUnsatisfiedInterests": 154
+}
+
+class NfdVersion(NdnBasePacket):
+
+    fields_desc = [
+                    NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NfdVersion"]),
+                    NdnLenField(),
+                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
+                  ]
+
+class StartTimestamp(NdnBasePacket):
+
+    fields_desc = [
+                    NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["StartTimestamp"]),
+                    NdnLenField(),
+                    TimestampIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class CurrentTimestamp(NdnBasePacket):
+
+    fields_desc = [
+                    NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["CurrentTimestamp"]),
+                    NdnLenField(),
+                    TimestampIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NNameTreeEntries(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NNameTreeEntries"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NFibEntries(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NFibEntries"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NPitEntries(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NPitEntries"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NMeasurementsEntries(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NMeasurementsEntries"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NCsEntries(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NCsEntries"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NInInterests(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInInterests"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NInData(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInData"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NInNacks(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInNacks"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NOutInterests(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutInterests"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NOutData(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutData"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NOutNacks(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutNacks"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NSatisfiedInterests(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NSatisfiedInterests"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+class NUnsatisfiedInterests(NdnBasePacket):
+
+    fields_desc = [
+                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NUnsatisfiedInterests"]),
+                     NdnLenField(),
+                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+                  ]
+
+bind_content_cls_dict_to_data_name("/localhost/nfd/status/general", {
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NfdVersion"]: NfdVersion,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["StartTimestamp"]: StartTimestamp,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["CurrentTimestamp"]: CurrentTimestamp,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NNameTreeEntries"]: NNameTreeEntries,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NFibEntries"]: NFibEntries,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NPitEntries"]: NPitEntries,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NMeasurementsEntries"]: NMeasurementsEntries,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NCsEntries"]: NCsEntries,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInInterests"]: NInInterests,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInData"]: NInData,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInNacks"]: NInNacks,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutInterests"]: NOutInterests,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutData"]: NOutData,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutNacks"]: NOutNacks,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NSatisfiedInterests"]: NSatisfiedInterests,
+    NFD_GENERAL_DATASETS_CLS_TO_TYPE["NUnsatisfiedInterests"]: NUnsatisfiedInterests,
+})
+
+NFD_GENERAL_DATASETS_TYPES = {
+    "ChannelStatus"        : [ 130, NameComponent ],
+}
 
 NFD_MGMT_TYPES = {
     "FaceId": 105,
