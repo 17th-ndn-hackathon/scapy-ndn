@@ -588,6 +588,29 @@ class _NdnPacketList_metaclass(Packet_metaclass):
 
         return super(_NdnPacketList_metaclass, cls).__new__(cls, name, bases, dct)
 
+class _NdnNonNegativeInteger_metaclass(Packet_metaclass):
+
+    def __new__(cls, name, bases, dct):
+
+        fields_desc = []
+        if "NdnType" not in dct:
+            # Will throw an error that default is not provided,
+            # else we can provide empty string here like TypeBlock
+            fields_desc.append(NdnTypeField())
+        else:
+            fields_desc.append(NdnTypeField(dct["NdnType"]))
+
+        fields_desc.append(NdnLenField())
+        fields_desc.append(NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length))
+
+        print(fields_desc)
+        dct['fields_desc'] = fields_desc
+
+        return super(_NdnNonNegativeInteger_metaclass, cls).__new__(cls, name, bases, dct)
+
+class NonNegativeIntBase(NdnBasePacket, metaclass=_NdnNonNegativeInteger_metaclass):
+    NdnType = TYPES['GenericNameComponent']
+
 class PktListNameComponent(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['GenericNameComponent']
     TypeToCls  = {}

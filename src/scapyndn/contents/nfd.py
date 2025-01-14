@@ -4,7 +4,8 @@ from scapyndn.pkt import NdnTypeField, NdnLenField, NonNegativeIntField, \
     NdnBasePacket, Name, TYPES, \
     bind_content_cls_to_data_name, bind_content_cls_dict_to_data_name, \
     bind_component_cls_dict_to_name, NameComponent, \
-    TimestampNameComponent, NonNegIntNameComponent, TimestampIntField
+    TimestampNameComponent, NonNegIntNameComponent, TimestampIntField, \
+    NonNegativeIntBase
 
 NFD_GENERAL_DATASETS_CLS_TO_TYPE = {
     "NfdVersion"           : 128,
@@ -49,109 +50,44 @@ class CurrentTimestamp(NdnBasePacket):
                     TimestampIntField("value", 0, length_from=lambda pkt: pkt.length)
                   ]
 
-class NNameTreeEntries(NdnBasePacket):
+class NNameTreeEntries(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NNameTreeEntries"]
 
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NNameTreeEntries"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+class NFibEntries(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NFibEntries"]
 
-class NFibEntries(NdnBasePacket):
+class NPitEntries(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NPitEntries"]
 
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NFibEntries"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+class NMeasurementsEntries(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NMeasurementsEntries"]
 
-class NPitEntries(NdnBasePacket):
+class NCsEntries(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NCsEntries"]
 
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NPitEntries"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+class NInInterests(NonNegativeIntBase):
+   NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInInterests"]
 
-class NMeasurementsEntries(NdnBasePacket):
+class NInData(NonNegativeIntBase):
+   NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInData"]
 
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NMeasurementsEntries"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+class NInNacks(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInNacks"]
 
-class NCsEntries(NdnBasePacket):
+class NOutInterests(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutInterests"]
 
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NCsEntries"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+class NOutData(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutData"]
 
-class NInInterests(NdnBasePacket):
+class NOutNacks(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutNacks"]
 
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInInterests"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+class NSatisfiedInterests(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NSatisfiedInterests"]
 
-class NInData(NdnBasePacket):
-
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInData"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class NInNacks(NdnBasePacket):
-
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInNacks"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class NOutInterests(NdnBasePacket):
-
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutInterests"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class NOutData(NdnBasePacket):
-
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutData"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class NOutNacks(NdnBasePacket):
-
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutNacks"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class NSatisfiedInterests(NdnBasePacket):
-
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NSatisfiedInterests"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class NUnsatisfiedInterests(NdnBasePacket):
-
-    fields_desc = [
-                     NdnTypeField(NFD_GENERAL_DATASETS_CLS_TO_TYPE["NUnsatisfiedInterests"]),
-                     NdnLenField(),
-                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+class NUnsatisfiedInterests(NonNegativeIntBase):
+    NdnType = NFD_GENERAL_DATASETS_CLS_TO_TYPE["NUnsatisfiedInterests"]
 
 bind_content_cls_dict_to_data_name("/localhost/nfd/status/general", {
     NFD_GENERAL_DATASETS_CLS_TO_TYPE["NfdVersion"]: NfdVersion,
@@ -172,32 +108,65 @@ bind_content_cls_dict_to_data_name("/localhost/nfd/status/general", {
     NFD_GENERAL_DATASETS_CLS_TO_TYPE["NUnsatisfiedInterests"]: NUnsatisfiedInterests,
 })
 
-NFD_GENERAL_DATASETS_TYPES = {
-    "ChannelStatus"        : [ 130, NameComponent ],
+CONTROL_CMD_TYPES = {
+    "ControlParameters"             : 104, # 0x68
+    "FaceId"                        : 105, # 0x69
+    "Uri"                           : 114, # 0x72
+    "LocalUri"                      : 129, # 0x81
+    "Origin"                        : 111, # 0x6f
+    "Cost"                          : 106, # 0x6a
+    "Flags"                         : 108, # 0x6c
+    "Capacity"                      : 131, # 0x83
+    "Count"                         : 132, # 0x84
+    "BaseCongestionMarkingInterval" : 135, # 0x87
+    "DefaultCongestionThreshold"    : 136, # 0x88
+    "ControlResponse"               : 101, # 0x65
+    "StatusCode"                    : 102, # 0x66
+    "StatusText"                    : 103, # 0x67
 }
+
+NFD_CHANNEL_DATASET_CLS_TO_TYPE = {
+    "ChannelStatus"        : 130
+}
+
+class LocalUri(NdnBasePacket):
+
+    fields_desc = [
+                    NdnTypeField(CONTROL_CMD_TYPES["LocalUri"]),
+                    NdnLenField(),
+                    StrLenField("value", b"", length_from=lambda pkt: pkt.length)
+                  ]
+
+class ChannelStatus(NdnBasePacket):
+
+    TYPES_TO_CLS = { CONTROL_CMD_TYPES["LocalUri"] : LocalUri }
+
+    fields_desc = [
+                    NdnTypeField(NFD_CHANNEL_DATASET_CLS_TO_TYPE["ChannelStatus"]),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                        next_cls_cb=lambda pkt, lst, cur, remain
+                        : pkt.guess_ndn_packets(lst, cur, remain, ChannelStatus.TYPES_TO_CLS),
+                        length_from=lambda pkt: pkt.length)
+    ]
+
+bind_content_cls_dict_to_data_name("/localhost/nfd/faces/channels", {
+   NFD_CHANNEL_DATASET_CLS_TO_TYPE["ChannelStatus"] : ChannelStatus
+})
 
 NFD_MGMT_TYPES = {
     "FaceId": 105,
     "Cost": 106,
     "NfdFib": 128,
-    "NextHopRecord": 129
+    "NextHopRecord": 129,
+    "ExpirationPeriod": 109
 }
 
-class FaceId(NdnBasePacket):
+class FaceId(NonNegativeIntBase):
+    NdnType = NFD_MGMT_TYPES["FaceId"]
 
-    fields_desc = [
-                    NdnTypeField(NFD_MGMT_TYPES["FaceId"]),
-                    NdnLenField(),
-                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
-
-class Cost(NdnBasePacket):
-
-    fields_desc = [
-                    NdnTypeField(NFD_MGMT_TYPES["Cost"]),
-                    NdnLenField(),
-                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+class Cost(NonNegativeIntBase):
+    NdnType = NFD_MGMT_TYPES["Cost"]
 
 class NextHopRecord(NdnBasePacket):
 
@@ -230,57 +199,20 @@ class NfdFib(NdnBasePacket):
 #                 NameComponent(value="fib") / \
 #                 NameComponent(value="list"))
 
-CONTROL_CMD_TYPES = {
-    "ControlParameters"             : 104, # 0x68
-    "FaceId"                        : 105, # 0x69
-    "Uri"                           : 114, # 0x72
-    "LocalUri"                      : 129, # 0x81
-    "Origin"                        : 111, # 0x6f
-    "Cost"                          : 106, # 0x6a
-    "Flags"                         : 108, # 0x6c
-    "Capacity"                      : 131, # 0x83
-    "Count"                         : 132, # 0x84
-    "BaseCongestionMarkingInterval" : 135, # 0x87
-    "DefaultCongestionThreshold"    : 136, # 0x88
-    "ControlResponse"               : 101, # 0x65
-    "StatusCode"                    : 102, # 0x66
-    "StatusText"                    : 103, # 0x67
-}
+class FaceId(NonNegativeIntBase):
+    NdnType = CONTROL_CMD_TYPES["FaceId"]
 
-class FaceId(NdnBasePacket):
-    fields_desc = [
-        NdnTypeField(CONTROL_CMD_TYPES["FaceId"]),
-        NdnLenField(),
-        NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-    ]
+class Origin(NonNegativeIntBase):
+    NdnType = CONTROL_CMD_TYPES["Origin"]
 
-class Origin(NdnBasePacket):
-    fields_desc = [
-        NdnTypeField(CONTROL_CMD_TYPES["Origin"]),
-        NdnLenField(),
-        NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-    ]
+class Uri(NonNegativeIntBase):
+    NdnType = CONTROL_CMD_TYPES["Uri"]
 
-class Uri(NdnBasePacket):
-    fields_desc = [
-        NdnTypeField(CONTROL_CMD_TYPES["Uri"]),
-        NdnLenField(),
-        StrLenField("value", b"", length_from=lambda pkt: pkt.length)
-    ]
+class Cost(NonNegativeIntBase):
+    NdnType = CONTROL_CMD_TYPES["Cost"]
 
-class Cost(NdnBasePacket):
-    fields_desc = [
-        NdnTypeField(CONTROL_CMD_TYPES["Cost"]),
-        NdnLenField(),
-        NonNegativeIntField("value", b"", length_from=lambda pkt: pkt.length)
-    ]
-
-class Flags(NdnBasePacket):
-    fields_desc = [
-        NdnTypeField(CONTROL_CMD_TYPES["Flags"]),
-        NdnLenField(),
-        NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-    ]
+class Flags(NonNegativeIntBase):
+    NdnType = CONTROL_CMD_TYPES["Flags"]
 
 class ControlParameters(NdnBasePacket):
     TYPES_TO_CLS = {
@@ -301,12 +233,8 @@ class ControlParameters(NdnBasePacket):
                         length_from=lambda pkt: pkt.length)
     ]
 
-class StatusCode(NdnBasePacket):
-    fields_desc = [
-        NdnTypeField(CONTROL_CMD_TYPES["StatusCode"]),
-        NdnLenField(),
-        NonNegativeIntField("value", 200, length_from=lambda pkt: pkt.length)
-    ]
+class StatusCode(NonNegativeIntBase):
+    NdnType = CONTROL_CMD_TYPES["StatusCode"]
 
 class StatusText(NdnBasePacket):
     fields_desc = [
@@ -336,3 +264,79 @@ bind_content_cls_to_data_name("/localhost/nfd/fib/list", NfdFib)
 bind_content_cls_to_data_name("/localhost/nfd/rib/register", ControlResponse)
 bind_component_cls_dict_to_name("/localhost/nfd/rib/register", 0,
                                 { CONTROL_CMD_TYPES["ControlParameters"]: ControlParameters} )
+
+
+FACE_MGMT_CLS_TO_TYPE = {
+  "FaceStatus" : 128,
+  "FaceScope"  : 132,
+  "FacePersistency": 133,
+  "LinkType": 134,
+  "BaseCongestionMarkingInterval": 135,
+  "DefaultCongestionThreshold": 136,
+  "Mtu": 137,
+  "NInBytes": 148,
+  "NOutBytes": 149,
+}
+
+class ExpirationPeriod(NonNegativeIntBase):
+    NdnType = NFD_MGMT_TYPES["ExpirationPeriod"]
+
+class FaceScope(NonNegativeIntBase):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["FaceScope"]
+
+class FacePersistency(NonNegativeIntBase):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["FacePersistency"]
+
+class LinkType(NonNegativeIntBase):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["LinkType"]
+
+class BaseCongestionMarkingInterval(NonNegativeIntBase):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["BaseCongestionMarkingInterval"]
+
+class DefaultCongestionThreshold(NonNegativeIntBase):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["DefaultCongestionThreshold"]
+
+class Mtu(NonNegativeIntBase):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["Mtu"]
+
+class NInBytes(NonNegativeIntBase):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["NInBytes"]
+
+class NOutBytes(NonNegativeIntBase):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["NOutBytes"]
+
+class FaceStatus(NdnBasePacket):
+
+    TYPES_TO_CLS = {
+        NFD_MGMT_TYPES["FaceId"] : FaceId,
+        CONTROL_CMD_TYPES["Uri"] : Uri,
+        CONTROL_CMD_TYPES["LocalUri"] : LocalUri,
+        FACE_MGMT_CLS_TO_TYPE["FaceScope"] : FaceScope,
+        FACE_MGMT_CLS_TO_TYPE["FacePersistency"] : FacePersistency,
+        FACE_MGMT_CLS_TO_TYPE["LinkType"] : LinkType,
+        FACE_MGMT_CLS_TO_TYPE["BaseCongestionMarkingInterval"] : BaseCongestionMarkingInterval,
+        FACE_MGMT_CLS_TO_TYPE["DefaultCongestionThreshold"] : DefaultCongestionThreshold,
+        FACE_MGMT_CLS_TO_TYPE["Mtu"] : Mtu,
+        NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInInterests"] : NInInterests,
+        NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInData"] : NInData,
+        NFD_GENERAL_DATASETS_CLS_TO_TYPE["NInNacks"] : NInNacks,
+        NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutInterests"] : NOutInterests,
+        NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutData"] : NOutData,
+        NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutNacks"] : NOutNacks,
+        FACE_MGMT_CLS_TO_TYPE["NInBytes"] : NInBytes,
+        FACE_MGMT_CLS_TO_TYPE["NOutBytes"] : NOutBytes,
+        CONTROL_CMD_TYPES["Flags"] : Flags
+    }
+
+    fields_desc = [
+                    NdnTypeField(FACE_MGMT_CLS_TO_TYPE["FaceStatus"]),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                        next_cls_cb=lambda pkt, lst, cur, remain
+                        : pkt.guess_ndn_packets(lst, cur, remain, FaceStatus.TYPES_TO_CLS),
+                        length_from=lambda pkt: pkt.length)
+    ]
+
+bind_content_cls_dict_to_data_name("/localhost/nfd/faces/list", {
+   FACE_MGMT_CLS_TO_TYPE["FaceStatus"] : FaceStatus
+})
