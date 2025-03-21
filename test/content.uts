@@ -1,0 +1,10 @@
+# -*- mode: python -*-
+
+# Generic Block tests
+
+c = Content (
+    value= NameComponent(value="ibf-size") / NonNegIntNameComponent(value=129477)
+)
+c = Content(raw(c))
+assert type(c.value[0]) == Block
+assert type(c.value[1]) == Block

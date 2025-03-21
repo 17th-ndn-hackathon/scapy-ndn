@@ -24,7 +24,7 @@ d = Data(value=
 d = Data(raw(d))
 # d.show2()
 assert "Content" in d
-assert "Raw" in d["Content"].value[0]
+assert "Block" in d["Content"].value[0]
 
 bind_content_cls_to_data_name("/test/custom", IP)
 
@@ -47,6 +47,7 @@ d = Data(value=
 d = Data(raw(d))
 d.show2()
 assert "Content" in d
+assert "Block" in d["Content"].value[0]
 assert "Raw" in d["Content"].value[0]
 
 bind_content_cls_to_data_name("/test/custom1", NameComponent)
@@ -72,8 +73,9 @@ d = Data(value=
 d = Data(raw(d))
 d.show2()
 assert "Content" in d
-assert len(d["Content"].value) == 1
-assert type(d["Content"].value[0]) == Raw
+assert len(d["Content"].value) == 2
+assert type(d["Content"].value[0]) == Block
+assert type(d["Content"].value[1]) == Block
 
 bind_content_cls_dict_to_data_name("/test/custom2/dict",
                                    { TYPES["GenericNameComponent"] : NameComponent,

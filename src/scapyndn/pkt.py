@@ -191,8 +191,9 @@ class NonNegativeIntField(Field):
     def i2repr(self, pkt, x):
         if self.enum and x in self.enum:
             return "{} [{}]".format(x, self.enum[x])
-        else:
+        elif x is not None:
             return "{0} (0x{0:02X})".format(x)
+        return ""
 
 class TimestampIntField(NonNegativeIntField):
 
@@ -392,8 +393,40 @@ class Raw_ASN1_BIT_STRING(StrField):
             s
         )
 
+class TypeBlock(Packet):
+
+    fields_desc = [ NdnTypeField("") ]
+
+class LengthCheckBlock(Packet):
+
+    fields_desc = [
+                    NdnTypeField(""),
+                    NdnLenField(),
+                    StrField("value", "")
+                  ]
+
+class Block(Packet):
+   fields_desc = [
+       NdnTypeField(""),
+       NdnLenField(),
+       PacketListField("value", [],
+                       next_cls_cb=lambda pkt, lst, cur, remain :
+                           pkt.guess_ndn_packets(lst, cur, remain),
+                       length_from=lambda pkt: pkt.length)
+   ]
+
+   def guess_ndn_packets(self, lst, cur, remain):
+       b = LengthCheckBlock(remain)
+       if b.length != len(b.value):
+           return Raw
+       return Block
+
+   def guess_payload_class(self, p):
+       return conf.padding_layer
+
 class NdnBasePacket(Packet):
 
+    # Default can be a TLV Block instead of Raw
     def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
         blk = TypeBlock(remain)
         if blk.type in types_to_cls:
@@ -402,6 +435,15 @@ class NdnBasePacket(Packet):
 
     def guess_payload_class(self, payload):
         return conf.padding_layer
+
+class NameComponent(NdnBasePacket):
+    name = "Name Component (String)"
+
+    fields_desc = [
+                    NdnTypeField(TYPES['GenericNameComponent']),
+                    NdnLenField(),
+                    NdnStrLenField("value", "", length_from=lambda pkt: pkt.length)
+                  ]
 
     @staticmethod
     def _unescape(input_str):
@@ -422,18 +464,6 @@ class NdnBasePacket(Packet):
             i += 1
         return unescaped
 
-class TypeBlock(NdnBasePacket):
-
-    fields_desc = [ NdnTypeField("") ]
-
-class NameComponent(NdnBasePacket):
-    name = "Name Component (String)"
-
-    fields_desc = [
-                    NdnTypeField(TYPES['GenericNameComponent']),
-                    NdnLenField(),
-                    NdnStrLenField("value", "", length_from=lambda pkt: pkt.length)
-                  ]
 
     def show2(self, dump=False, indent=3, lvl="", label_lvl=""):
         return super(NameComponent, self).show2(dump, indent, lvl, label_lvl)
@@ -544,9 +574,6 @@ class NameComponent(NdnBasePacket):
             uri_str += NameComponent.escape(bytes(val))
         return uri_str
 
-class Block(NameComponent):
-    name = "Block"
-
 class StrFieldPacket(Packet):
 
     fields_desc = [ StrField("value", "") ]
@@ -603,7 +630,6 @@ class _NdnNonNegativeInteger_metaclass(Packet_metaclass):
         fields_desc.append(NdnLenField())
         fields_desc.append(NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length))
 
-        print(fields_desc)
         dct['fields_desc'] = fields_desc
 
         return super(_NdnNonNegativeInteger_metaclass, cls).__new__(cls, name, bases, dct)
@@ -860,27 +886,12 @@ class FinalBlockId(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-#class Block2(NdnBasePacket):
-#    fields_desc = [
-#        NdnTypeField(TYPES["GenericNameComponent"]),
-#        NdnLenField(),
-#        PacketListField("value", [],
-#                        next_cls_cb=lambda pkt, lst, cur, remain : Block2,
-#                        length_from=lambda pkt: pkt.length)
-#    ]
-
-#    def guess_payload_class(self, p):
-#        return conf.padding_layer
-
-#    #def guess_payload_class(self, p):
-#    #    return Block2
-
 class Content(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(TYPES["Content"]),
                     NdnLenField(),
-                    PacketListField("value", [],
+                    PacketListField("value", [], Block,
                                     length_from=lambda pkt: pkt.length)
                   ]
 
@@ -1034,7 +1045,18 @@ class RsaSignature(Packet):
 class SignatureValue(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
     NdnType = TYPES['SignatureValue']
 
+# Why use PktCls is here as value should not be a PacketList?
+# Becasue ECSDASignature is a Packet we should use PacketField
+class ECDSASignatureValue(NdnBasePacket): #, metaclass=_NdnPacketList_metaclass):
+    #name = "ECDSA PacketListField"
+    fields_desc = [
+                    NdnTypeField(TYPES['SignatureValue']),
+                    NdnLenField(),
+                    PacketField("value", ECDSASignature(), ECDSASignature)
+                  ]
+
 class ECDSASignatureValue(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+#    name = "ECDSA PacketList"
     NdnType = TYPES['SignatureValue']
     PktCls  = ECDSASignature
 

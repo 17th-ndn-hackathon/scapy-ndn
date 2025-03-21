@@ -1,3 +1,5 @@
+# -*- mode: python -*-
+
 % Regression tests for Scapy Interest
 
 ############
@@ -6,7 +8,7 @@
 
 = Nonce tests
 
-from scapyndn.pkt import NdnLenField, NameComponent, Sha256Digest, \
+from scapyndn.pkt import NdnLenField, NameComponent, \
                          TYPES, COMP_TYPES, Interest, Name, Nonce
 
 n = Nonce(b"\x0A\x04\x00\x00\x00\x20")
