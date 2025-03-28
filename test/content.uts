@@ -1,5 +1,13 @@
 # -*- mode: python -*-
 
+############
+############
++ Content test
+
+= Content default decoded as Block
+
+from scapyndn.pkt import *
+
 # Generic Block tests
 
 c = Content (

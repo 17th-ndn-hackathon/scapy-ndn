@@ -95,6 +95,8 @@ LP_TYPES = {
              "Sequence"           : 81,  # 0x51
              "FragIndex"          : 82,  # 0x52
              "FragCount"          : 83,  # 0x53
+             "HopCount_ndnSIM"    : 84,  # 0x54
+             "GeoTag_ndnSIM"      : 85,  # 0x55
              "PitToken"           : 98,  # 0x62
              "Nack"               : 800, # 0x320
              "NackReason"         : 801, # 0x321
@@ -427,7 +429,7 @@ class Block(Packet):
 class NdnBasePacket(Packet):
 
     # Default can be a TLV Block instead of Raw
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Block):
         blk = TypeBlock(remain)
         if blk.type in types_to_cls:
             return types_to_cls[blk.type]
@@ -708,18 +710,43 @@ class ParametersSha256DigestComponent(NameComponent):
 
 NAME_URI_TO_NAME_COMPONENT_VALUE_CLS = {}
 def bind_cls_to_name(name_uri, num_after_name, cls):
+    # type: (str, int, Packet) -> None
+    """
+    When dissecting Name, it could have a Packet type other than NameComponent*
+    such as ControlParameters.
+        * name_uri: str such as /localhop/sync/
+        * num_after_name: int such as 0 i.e. immediately after the given name_uri
+        * cls: cls such as IBF
+    """
     if name_uri not in NAME_URI_TO_NAME_COMPONENT_VALUE_CLS:
         NAME_URI_TO_NAME_COMPONENT_VALUE_CLS[name_uri] = { num_after_name : cls }
     else:
         NAME_URI_TO_NAME_COMPONENT_VALUE_CLS[name_uri][num_after_name] = cls
 
 def bind_component_cls_dict_to_name(name_uri, num_after_name, types_to_cls):
+    # type: (str, int, dict[int, Packet]) -> None
+    """
+    When dissecting Name, it could have various Packet types other than NameComponent*
+    such as ControlParameters
+        * name_uri: str such as /localhost/nfd/rib/register
+        * num_after_name: int such as 0 i.e. immediately after the given name_uri
+        * types_to_cls: dict such as
+          { CONTROL_CMD_TYPES["ControlParameters"]: ControlParameters}
+    """
     class GuessPktListNameComponent(NameComponent, metaclass=_NdnPacketList_metaclass):
         NdnType   = TYPES['GenericNameComponent']
         TypeToCls = types_to_cls
     bind_cls_to_name(name_uri, num_after_name, GuessPktListNameComponent)
 
 def bind_component_cls_to_name(name_uri, num_after_name, pkt_cls):
+    # type: (str, int, Packet) -> None
+    """
+    When dissecting Name, it could have a list of given Packet type
+    other than NameComponent* such as NonNegIntNameComponent.
+        * name_uri: str such as /localhop/test/
+        * num_after_name: int such as 0 i.e. immediately after the given name_uri
+        * pkt_cls: cls such as NonNegIntNameComponent
+    """
     class PktListNameComponent(NameComponent, metaclass=_NdnPacketList_metaclass):
         NdnType = TYPES['GenericNameComponent']
         PktCls  = pkt_cls
@@ -1139,12 +1166,33 @@ class Interest(NdnBasePacket):
 
 NAME_URI_TO_CONTENT_CLS = {}
 def bind_content_cls_to_data_name(name_uri, content_val_cls):
+    # type: (str, Packet) -> None
+    """
+    Creates a mapping from a NameURI to Content class with value as content_val_cls
+    This Content class is then used during Data packet dissection when NameURI matches.
+
+        * name_uri: str such as /localhost/nfd/fib/list
+        * content_val_cls: cls such as NfdFib
+    """
     class Content(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
         NdnType = TYPES["Content"]
         PktCls  = content_val_cls
     NAME_URI_TO_CONTENT_CLS[name_uri] = Content
 
 def bind_content_cls_dict_to_data_name(name_uri, type_to_cls):
+    # type: (str, dict[int, Packet]) -> None
+    """
+    Creates a mapping from a NameURI to Content class which uses
+    the given type_to_cls dictionary to guess the value of the Content.
+    This Content class is then used during Data packet dissection when NameURI matches.
+
+        * name_uri: str such as /localhost/nfd/status/general
+        * type_to_cls: dict such as
+          {
+              NFD_GENERAL_DATASETS_CLS_TO_TYPE["NfdVersion"]: NfdVersion,
+              NFD_GENERAL_DATASETS_CLS_TO_TYPE["StartTimestamp"]: StartTimestamp
+          }
+    """
     class Content(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
         NdnType   = TYPES["Content"]
         TypeToCls = type_to_cls
@@ -1203,7 +1251,7 @@ class Data(NdnBasePacket):
                 if cls_to_return is not None:
                     return cls_to_return
         if blk.type == TYPES["SignatureValue"]:
-            if type(cur) == SignatureInfo:
+            if isinstance(cur, SignatureInfo):
                 sigtype = cur["SignatureType"].value
                 if sigtype in SIG_TYPE_TO_CLS and sigtype is not None:
                     return SIG_TYPE_TO_CLS[sigtype]
@@ -1250,10 +1298,18 @@ class LinkObject(Data):
 class Sequence(NdnBasePacket):
 
     fields_desc = [
-                    NdnTypeField(LP_TYPES['Sequence']),
-                    NdnLenField(),
-                    NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
-                  ]
+        NdnTypeField(LP_TYPES["Sequence"]),
+        NdnLenField(),
+        NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+    ]
+
+class TxSequence(NdnBasePacket):
+
+    fields_desc = [
+        NdnTypeField(LP_TYPES["TxSequence"]),
+        NdnLenField(),
+        NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length)
+    ]
 
 class FragIndex(NdnBasePacket):
 
@@ -1294,8 +1350,48 @@ class Nack(NdnBasePacket):
                     PacketListField("value", "", NackReason, length_from=lambda pkt: pkt.length)
                   ]
 
+class Fragment(NdnBasePacket):
+    TYPES_TO_CLS = {
+        TYPES["Interest"] : Interest,
+        TYPES["Data"] : Data
+    }
+
+    fields_desc = [
+                    NdnTypeField(LP_TYPES['Fragment']),
+                    NdnLenField(),
+                    PacketListField("value", [],
+                                     next_cls_cb=lambda pkt, lst, cur, remain
+                                     : pkt.guess_ndn_packets(lst, cur, remain, Fragment.TYPES_TO_CLS),
+                                     length_from=lambda pkt: pkt.length)
+                  ]
+
+class PitToken(NdnBasePacket):
+    fields_desc = [
+        NdnTypeField(LP_TYPES["PitToken"]),
+        NdnLenField(),
+        StrLenField("value", b"", length_from=lambda pkt: pkt.length)
+    ]
+
+class Ack(NonNegativeIntBase):
+    NdnType = LP_TYPES["Ack"]
+
+class NextHopFaceId(NonNegativeIntBase):
+    NdnType = LP_TYPES["NextHopFaceId"]
+
 class LpPacket(NdnBasePacket):
-    TYPES_TO_CLS = { LP_TYPES['Nack'] : Nack }
+    TYPES_TO_CLS = {
+        TYPES["Interest"] : Interest,
+        TYPES["Data"] : Data,
+        LP_TYPES["Nack"] : Nack,
+        LP_TYPES["Fragment"] : Fragment,
+        LP_TYPES["Sequence"] : Sequence,
+        LP_TYPES["FragIndex"] : FragIndex,
+        LP_TYPES["FragCount"] : FragCount,
+        LP_TYPES["PitToken"] : PitToken,
+        LP_TYPES["TxSequence"] : TxSequence,
+        LP_TYPES["Ack"] : Ack,
+        LP_TYPES["NextHopFaceId"] : NextHopFaceId
+    }
 
     fields_desc = [
                     NdnTypeField(LP_TYPES['LpPacket']),
@@ -1310,17 +1406,18 @@ class NdnGuessPacket(Packet):
     'Dummy packet for guessing NDN packets via bind_layers'
 
     TYPES_TO_CLS = {
-                     TYPES["Interest"] : Interest,
-                     TYPES["Data"] : Data,
-                     # TYPES["Lp"]
-                   }
+        TYPES["Interest"] : Interest,
+        TYPES["Data"] : Data,
+        LP_TYPES["LpPacket"] : LpPacket
+    }
 
     @classmethod
     def dispatch_hook(cls, _pkt=None, *args, **kargs):
         # type: (Optional[bytes], *Any, **Any) -> Type[Packet]
         if _pkt is not None:
             blk = TypeBlock(_pkt)
-            return NdnGuessPacket.TYPES_TO_CLS[blk.type]
+            if blk.type in NdnGuessPacket.TYPES_TO_CLS:
+                return NdnGuessPacket.TYPES_TO_CLS[blk.type]
         return Block
 
 bind_layers(Ether, NdnGuessPacket, type=0x8624)

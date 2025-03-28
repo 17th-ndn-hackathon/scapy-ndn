@@ -1,0 +1,48 @@
+# -*- mode: python -*-
+
+############
+############
++ NDNLPv2 tests
+
+= LP NdnPing Packet Nack test
+
+from scapy.all import *
+from scapyndn.pkt import *
+
+ndnping_pkt = NdnGuessPacket(b'd%\xfd\x03 \x05\xfd\x03!\x01\x96P\x1a\x05\x18\x07\x0c\x08\x04test\x08\x04ping!\x00\x12\x00\n\x04q\xff\x95\xef')
+
+# ndnping_pkt.show2()
+assert type(ndnping_pkt) == LpPacket
+assert Nack in ndnping_pkt
+assert NackReason in ndnping_pkt["Nack"]
+assert ndnping_pkt["Nack"]["NackReason"].value == 150
+assert Fragment in ndnping_pkt
+assert Interest in ndnping_pkt["Fragment"]
+
+= NDNLPv2 pcap test
+
+pkts = rdpcap("test/pcaps/ndnlpv2.pcap")
+assert LpPacket in pkts[0]
+
+assert LpPacket in pkts[1]
+assert FragCount in pkts[1]["LpPacket"]
+assert pkts[1]["LpPacket"]["FragCount"].value == 2
+assert Sequence in pkts[1]["LpPacket"]
+assert pkts[1]["LpPacket"]["Sequence"].value == 12732154106453800448
+assert Interest in pkts[1]["LpPacket"]["Fragment"]
+
+assert type(pkts[3]["LpPacket"]["Fragment"].value[0]) == Block
+assert pkts[3]["LpPacket"]["Fragment"].value[0].type == 10
+
+assert pkts[4]["LpPacket"]["Nack"]["NackReason"].value == 50
+assert pkts[4]["LpPacket"]["Fragment"]["Interest"].value[1].value == 0xa0a1a2a3
+
+assert pkts[8]["LpPacket"]["Nack"].value == []
+
+assert "PitToken" in pkts[9]["LpPacket"]
+
+assert "TxSequence" in pkts[10]["LpPacket"]
+assert "SignatureInfo" in pkts[10]["LpPacket"]["Fragment"]["Data"]
+
+assert "Ack" in pkts[11]["LpPacket"]
+assert len(pkts[11]["LpPacket"].value) == 8
