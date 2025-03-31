@@ -404,7 +404,7 @@ class LengthCheckBlock(Packet):
     fields_desc = [
                     NdnTypeField(""),
                     NdnLenField(),
-                    StrField("value", "")
+                    NdnStrLenField("value", "", length_from=lambda pkt: pkt.length)
                   ]
 
 class Block(Packet):
