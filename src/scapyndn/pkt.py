@@ -408,23 +408,23 @@ class LengthCheckBlock(Packet):
                   ]
 
 class Block(Packet):
-   fields_desc = [
-       NdnTypeField(""),
-       NdnLenField(),
-       PacketListField("value", [],
-                       next_cls_cb=lambda pkt, lst, cur, remain :
+    fields_desc = [
+        NdnTypeField(""),
+        NdnLenField(),
+        PacketListField("value", [],
+                        next_cls_cb=lambda pkt, lst, cur, remain :
                            pkt.guess_ndn_packets(lst, cur, remain),
-                       length_from=lambda pkt: pkt.length)
-   ]
+                        length_from=lambda pkt: pkt.length)
+    ]
 
-   def guess_ndn_packets(self, lst, cur, remain):
-       b = LengthCheckBlock(remain)
-       if b.length != len(b.value):
-           return Raw
-       return Block
+    def guess_ndn_packets(self, lst, cur, remain):
+        b = LengthCheckBlock(remain)
+        if b.length != len(b.value):
+            return Raw
+        return Block
 
-   def guess_payload_class(self, p):
-       return conf.padding_layer
+    def guess_payload_class(self, p):
+        return conf.padding_layer
 
 class NdnBasePacket(Packet):
 
@@ -734,6 +734,7 @@ def bind_component_cls_dict_to_name(name_uri, num_after_name, types_to_cls):
           { CONTROL_CMD_TYPES["ControlParameters"]: ControlParameters}
     """
     class GuessPktListNameComponent(NameComponent, metaclass=_NdnPacketList_metaclass):
+        name      = "NameComponent (PktList)"
         NdnType   = TYPES['GenericNameComponent']
         TypeToCls = types_to_cls
     bind_cls_to_name(name_uri, num_after_name, GuessPktListNameComponent)
@@ -772,7 +773,7 @@ class Name(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
               ]
 
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Block):
         '''
         Override to decode content within names
         '''
@@ -819,6 +820,7 @@ class Name(NdnBasePacket):
         return self.__class__(raw(self))._to_uri()
 
     def is_prefix_of(self, other):
+        # type: (str) -> tuple[bool, int]
         if type(other) == str:
             other_component_list = other[1:].split("/")
             if len(other_component_list) > len(self.value):
