@@ -445,7 +445,7 @@ class NameComponent(NdnBasePacket):
                     NdnTypeField(TYPES['GenericNameComponent']),
                     NdnLenField(),
                     NdnStrLenField("value", "", length_from=lambda pkt: pkt.length)
-                  ]
+    ]
 
     @staticmethod
     def _unescape(input_str):
@@ -832,6 +832,22 @@ class Name(NdnBasePacket):
             return True, len(other_component_list)
         return False, 0
 
+    @staticmethod
+    def concat_comp_from_str(prefix):
+        name_val = None
+        for comp_str in prefix.split("/"):
+            if len(comp_str) == 0:
+                continue
+            if name_val is None:
+                name_val = NameComponent(value=comp_str)
+            else:
+                name_val /= NameComponent(value=comp_str)
+        return name_val
+
+    @staticmethod
+    def get_name(prefix):
+        return Name(value=Name.concat_comp_from_str(prefix))
+
 class Nonce(NdnBasePacket):
     name = "Nonce"
 
@@ -1149,7 +1165,7 @@ class Interest(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Block):
         '''
         Override to decode:
             - InterestSignatureValue class once InterestSignatureType is decoded
@@ -1219,7 +1235,7 @@ class Data(NdnBasePacket):
                                      length_from=lambda pkt: pkt.length)
                   ]
 
-    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Raw):
+    def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Block):
         '''
         Override to decode:
             - Content class for the Name once Name is decoded
@@ -1271,7 +1287,7 @@ class LinkContent(NdnBasePacket):
     fields_desc = [
                     NdnTypeField(TYPES["Content"]),
                     NdnLenField(),
-                    PacketLenField("value", "", Name, length_from=lambda pkt: pkt.length)
+                    PacketListField("value", [], Name, length_from=lambda pkt: pkt.length)
                   ]
 
 class LinkObject(Data):
@@ -1344,12 +1360,13 @@ class NackReason(NdnBasePacket):
                     NonNegativeIntField("value", 0, length_from=lambda pkt: pkt.length, enum=NACK_REASONS)
                   ]
 
+# Could just use PacketField here
 class Nack(NdnBasePacket):
 
     fields_desc = [
                     NdnTypeField(LP_TYPES['Nack']),
                     NdnLenField(),
-                    PacketListField("value", "", NackReason, length_from=lambda pkt: pkt.length)
+                    PacketListField("value", [], NackReason, length_from=lambda pkt: pkt.length)
                   ]
 
 class Fragment(NdnBasePacket):

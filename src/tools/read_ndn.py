@@ -1,6 +1,7 @@
 
 from scapy.all import *
 from scapyndn.pkt import *
+from scapyndn.contents.nfd import *
 
 import argparse
 
