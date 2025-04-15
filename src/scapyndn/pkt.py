@@ -179,14 +179,17 @@ class NonNegativeIntField(Field):
         self.sz = len_pkt
 
         val = None
-        if self.sz == 1:
-            val = self.m2i(pkt, struct.unpack(">B", s[:len_pkt])[0])
-        elif self.sz == 2:
-            val = self.m2i(pkt, struct.unpack(">H", s[:len_pkt])[0])
-        elif self.sz == 4:
-            val = self.m2i(pkt, struct.unpack(">L", s[:len_pkt])[0])
-        elif self.sz == 8:
-            val = self.m2i(pkt, struct.unpack(">Q", s[:len_pkt])[0])
+        try:
+            if self.sz == 1:
+                val = self.m2i(pkt, struct.unpack(">B", s[:len_pkt])[0])
+            elif self.sz == 2:
+                val = self.m2i(pkt, struct.unpack(">H", s[:len_pkt])[0])
+            elif self.sz == 4:
+                val = self.m2i(pkt, struct.unpack(">L", s[:len_pkt])[0])
+            elif self.sz == 8:
+                val = self.m2i(pkt, struct.unpack(">Q", s[:len_pkt])[0])
+        except Exception as e:
+            return s, None
 
         return s[len_pkt:], val
 
@@ -287,14 +290,18 @@ class NdnLenField(Field):
 
         # Check the first octet
         x = ord(s[:1])
-        if x < 253:
-            return s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
-        elif x == 253:
-            return s[3:], self.m2i(pkt, struct.unpack(">H", s[1:3])[0])
-        elif x == 254:
-            return s[5:], self.m2i(pkt, struct.unpack(">L", s[1:5])[0])
-        else:
-            return s[9:], self.m2i(pkt, struct.unpack(">Q", s[1:9])[0])
+
+        try:
+            if x < 253:
+                return s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
+            elif x == 253:
+                return s[3:], self.m2i(pkt, struct.unpack(">H", s[1:3])[0])
+            elif x == 254:
+                return s[5:], self.m2i(pkt, struct.unpack(">L", s[1:5])[0])
+            else:
+                return s[9:], self.m2i(pkt, struct.unpack(">Q", s[1:9])[0])
+        except Exception as e:
+            return s, None
 
 class NdnTypeField(Field):
     __slots__ = ["valid_types"]
@@ -354,14 +361,17 @@ class NdnTypeField(Field):
 
         x = ord(s[:1])
 
-        if x < 253:
-            rest_of_pkt, val = s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
-        elif x == 253:
-            rest_of_pkt, val = s[3:], self.m2i(pkt, struct.unpack(">H", s[1:3])[0])
-        elif x == 254:
-            rest_of_pkt, val = s[5:], self.m2i(pkt, struct.unpack(">L", s[1:5])[0])
-        else:
-            rest_of_pkt, val = s[9:], self.m2i(pkt, struct.unpack(">Q", s[1:9])[0])
+        try:
+            if x < 253:
+                rest_of_pkt, val = s[1:], self.m2i(pkt, struct.unpack(">B", s[:1])[0])
+            elif x == 253:
+                rest_of_pkt, val = s[3:], self.m2i(pkt, struct.unpack(">H", s[1:3])[0])
+            elif x == 254:
+                rest_of_pkt, val = s[5:], self.m2i(pkt, struct.unpack(">L", s[1:5])[0])
+            else:
+                rest_of_pkt, val = s[9:], self.m2i(pkt, struct.unpack(">Q", s[1:9])[0])
+        except Exception as e:
+            return s, None
 
         if self.valid_types is not None:
             if val not in self.valid_types:
@@ -407,6 +417,7 @@ class LengthCheckBlock(Packet):
                     NdnStrLenField("value", "", length_from=lambda pkt: pkt.length)
                   ]
 
+# conf.debug_dissector = True
 class Block(Packet):
     fields_desc = [
         NdnTypeField(""),
