@@ -36,15 +36,16 @@ assert "MustBeFresh" in i
 
 # 00 before MustBeFresh
 i = Interest(b"\x05\x14\x07\x0E\x08\x05\x74\x65\x73\x74\x31\x08\x05\x74\x65\x73\x74\x32\x00\x12")
-assert "Raw" in i
+assert "Block" in i
 
 # 00 for both at the end
 i = Interest(b"\x05\x14\x07\x0E\x08\x05\x74\x65\x73\x74\x31\x08\x05\x74\x65\x73\x74\x32\x00\x00")
-assert "Raw" in i
+assert "Block" in i
 
 # Extra zeros (more than the length)
 i = Interest(b"\x05\x14\x07\x0E\x08\x05\x74\x65\x73\x74\x31\x08\x05\x74\x65\x73\x74\x32\x00\x00\x00\x00\x00")
-assert "Raw" in i
+i.show2()
+assert "Block" in i
 assert "Padding" in i
 
 = Signed Interest Test

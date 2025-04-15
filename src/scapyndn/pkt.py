@@ -430,16 +430,19 @@ class Block(Packet):
 
     def guess_ndn_packets(self, lst, cur, remain):
         b = LengthCheckBlock(remain)
-        if b.length != len(b.value):
-            return Raw
-        return Block
 
-    def guess_payload_class(self, p):
+        if b.length is not None and b.length == len(b.value):
+            return Block
+        return Raw
+
+    def guess_payload_class(self, payload):
         return conf.padding_layer
+
+class NameComponentBlock(Block):
+    pass
 
 class NdnBasePacket(Packet):
 
-    # Default can be a TLV Block instead of Raw
     def guess_ndn_packets(self, lst, cur, remain, types_to_cls, default=Block):
         blk = TypeBlock(remain)
         if blk.type in types_to_cls:
