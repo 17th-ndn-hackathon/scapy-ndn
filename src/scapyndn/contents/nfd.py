@@ -307,7 +307,11 @@ class ControlResponse(NdnBasePacket):
 
 bind_content_cls_to_data_name("/localhost/nfd/fib/list", NfdFib)
 bind_content_cls_to_data_name("/localhost/nfd/rib/register", ControlResponse)
+bind_content_cls_to_data_name("/localhost/nfd/rib/unregister", ControlResponse)
 bind_component_cls_dict_to_name("/localhost/nfd/rib/register", 0,
+                                {CONTROL_CMD_TYPES["ControlParameters"]:
+                                 ControlParameters})
+bind_component_cls_dict_to_name("/localhost/nfd/rib/unregister", 0,
                                 {CONTROL_CMD_TYPES["ControlParameters"]:
                                  ControlParameters})
 

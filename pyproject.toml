@@ -26,3 +26,6 @@ exclude = [
     "test*",
     "doc*",
 ]
+
+[project.scripts]
+sn-nfdc = "tools.nfdc:entry"
