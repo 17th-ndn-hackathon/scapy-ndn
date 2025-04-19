@@ -56,9 +56,9 @@ pkt.show2()
 
 Run all the tests:
 
-    python3 -m scapy.tools.UTscapy -c test/config/ndn.utsc 
+    python3 -m scapy.tools.UTscapy -c test/ndn.utsc 
 
 Run specific tests:
 
-	python3 -m scapy.tools.UTscapy -t test/nfd.uts
+    python3 -m scapy.tools.UTscapy -t test/nfd.uts
     python3 -m scapy.tools.UTscapy -t test/binding.uts
