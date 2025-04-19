@@ -13,7 +13,8 @@ description = "Scapy NDN: Named-Data Networking definitions and helpers for Scap
 keywords = [ "network", "ndn", "scapy" ]
 
 dependencies = [
-  "scapy"
+  "scapy",
+  "python-ndn"
 ]
 
 [tool.setuptools.packages.find]
