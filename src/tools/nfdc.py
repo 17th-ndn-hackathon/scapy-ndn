@@ -11,7 +11,8 @@ from scapyndn.pkt import (
     Interest,
     NdnGuessPacket,
     CanBePrefix,
-    MustBeFresh
+    MustBeFresh,
+    VersionNameComponent
 )
 from scapyndn.contents.nfd import (
     FaceId,
@@ -119,19 +120,31 @@ async def main(parser, args):
                      NameComponent(value="strategy-choice") /
                      NameComponent(value="list"))
             interest = Interest(value=n / CanBePrefix() / MustBeFresh())
-        if args.set is True:
+        elif args.set is True:
             if args.prefix is None or args.strategy is None:
                 print("Need --prefix <> --strategy <>")
                 f.shutdown()
                 sys.exit(1)
 
-            strategy = Strategy(value=Name.get_name(args.strategy))
+            strategy = Strategy(value=Name.get_name(
+                args.strategy, {"v": (VersionNameComponent, int)}))
             cp = ControlParameters(value=Name.get_name(args.prefix) / strategy)
             interest_name_val = \
                 Name.concat_comp_from_str("/localhost/nfd/strategy-choice/set")
             interest_name_val /= NameComponent(value=cp)
             interest = get_signed_interest_with_default_key(interest_name_val)
             # interest.show2()
+        elif args.unset is True:
+            if args.prefix is None:
+                print("Need --prefix <>")
+                f.shutdown()
+                sys.exit(1)
+
+            cp = ControlParameters(value=Name.get_name(args.prefix))
+            interest_name_val = \
+                Name.concat_comp_from_str("/localhost/nfd/strategy-choice/unset")
+            interest_name_val /= NameComponent(value=cp)
+            interest = get_signed_interest_with_default_key(interest_name_val)
     elif args.command == "cs":
         if args.info is True:
             n = Name(value=NameComponent(value="localhost") /
@@ -169,6 +182,8 @@ def entry():
     group.add_argument("--list", action="store_true",
                        help="print general status")
     group.add_argument("--set", action="store_true",
+                       help="print general status")
+    group.add_argument("--unset", action="store_true",
                        help="print general status")
     group.add_argument("--prefix", action="store", help="")
     group.add_argument("--strategy", action="store", help="")

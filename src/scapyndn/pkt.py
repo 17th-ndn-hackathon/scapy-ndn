@@ -861,20 +861,29 @@ class Name(NdnBasePacket):
         return False, 0
 
     @staticmethod
-    def concat_comp_from_str(prefix):
+    def concat_comp_from_str(prefix, alt_uri_map={}):
         name_val = None
         for comp_str in prefix.split("/"):
             if len(comp_str) == 0:
                 continue
-            if name_val is None:
-                name_val = NameComponent(value=comp_str)
+            alt_list = comp_str.split("=")
+            if len(alt_uri_map) != 0 and \
+               len(alt_list) == 2 and \
+               alt_list[0] in alt_uri_map:
+                alt_key = alt_list[0]
+                alt_val = alt_uri_map[alt_key][1](alt_list[1])
+                nc = alt_uri_map[alt_key][0](value=alt_val)
             else:
-                name_val /= NameComponent(value=comp_str)
+                nc = NameComponent(value=comp_str)
+            if name_val is None:
+                name_val = nc
+            else:
+                name_val /= nc
         return name_val
 
     @staticmethod
-    def get_name(prefix):
-        return Name(value=Name.concat_comp_from_str(prefix))
+    def get_name(prefix, alt_uri_map={}):
+        return Name(value=Name.concat_comp_from_str(prefix, alt_uri_map))
 
 
 class Nonce(NdnBasePacket):
