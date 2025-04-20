@@ -404,3 +404,39 @@ class FaceStatus(NdnBasePacket):
 bind_content_cls_dict_to_data_name("/localhost/nfd/faces/list", {
    FACE_MGMT_CLS_TO_TYPE["FaceStatus"]: FaceStatus
 })
+
+
+STRATEGY_MGMT_TYPE_TO_CLS = {
+    "Strategy": 107,
+    "StrategyChoice": 128
+}
+
+class Strategy(NdnBasePacket):
+
+    fields_desc = [
+        NdnTypeField(STRATEGY_MGMT_TYPE_TO_CLS["Strategy"]),
+        NdnLenField(),
+        PacketListField("value", [], Name)
+    ]
+
+class StrategyChoice(NdnBasePacket):
+
+    TYPES_TO_CLS = {
+        TYPES["Name"]: Name,
+        STRATEGY_MGMT_TYPE_TO_CLS["Strategy"]: Strategy,
+    }
+
+    fields_desc = [
+        NdnTypeField(STRATEGY_MGMT_TYPE_TO_CLS["StrategyChoice"]),
+        NdnLenField(),
+        PacketListField("value", [],
+                        next_cls_cb=lambda pkt, lst, cur, remain:
+                        pkt.guess_ndn_packets(lst, cur, remain,
+                                              StrategyChoice.TYPES_TO_CLS),
+                        length_from=lambda pkt: pkt.length)
+    ]
+
+
+bind_content_cls_dict_to_data_name("/localhost/nfd/strategy-choice/list", {
+    STRATEGY_MGMT_TYPE_TO_CLS["StrategyChoice"]: StrategyChoice
+})

@@ -30,7 +30,7 @@ async def on_pkt(typ, data):
     NdnGuessPacket(data).show2()
 
 
-async def main(args):
+async def main(parser, args):
     f = TcpFace()
     f.callback = on_pkt
     await f.open()
@@ -95,9 +95,8 @@ async def main(args):
                 Name.concat_comp_from_str("/localhost/nfd/rib/register")
             interest_name_val /= NameComponent(value=cp)
 
-            i = get_signed_interest_with_default_key(interest_name_val)
-            i.show2()
-            f.send(raw(i))
+            interest = get_signed_interest_with_default_key(interest_name_val)
+            # interest.show2()
         elif args.remove is True:
             name_to_reg = Name.get_name(args.prefix)
             ctrl_param_val = name_to_reg
@@ -112,17 +111,27 @@ async def main(args):
             interest_name_val = \
                 Name.concat_comp_from_str("/localhost/nfd/rib/unregister")
             interest_name_val /= NameComponent(value=cp)
-            i = get_signed_interest_with_default_key(interest_name_val)
-            i.show2()
-            f.send(raw(i))
+            interest = get_signed_interest_with_default_key(interest_name_val)
+            # interest.show2()
+    elif args.command == "strategy":
+        if args.list is True:
+            n = Name(value=NameComponent(value="localhost") /
+                     NameComponent(value="nfd") /
+                     NameComponent(value="strategy-choice") /
+                     NameComponent(value="list"))
+            interest = Interest(value=n / CanBePrefix() / MustBeFresh())
 
-    try:
-        await f.run()
-    except asyncio.CancelledError:
-        pass
-    finally:
-        f.shutdown()
+    if interest is not None:
+        f.send(raw(interest))
 
+        try:
+            await f.run()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            f.shutdown()
+    else:
+        parser.print_help()
 
 def entry():
     parser = argparse.ArgumentParser(prog="sn-nfdc")
@@ -137,6 +146,8 @@ def entry():
 
     parser_b = subparsers.add_parser("strategy", help="strategy subcommand")
     group = parser_b.add_mutually_exclusive_group()
+    group.add_argument("--list", action="store_true",
+                       help="print general status")
     group.add_argument("--show", action="store_true",
                        help="print general status")
 
@@ -158,7 +169,7 @@ def entry():
     # print(args)
 
     try:
-        asyncio.run(main(args))
+        asyncio.run(main(parser, args))
     except KeyboardInterrupt:
         pass
 
