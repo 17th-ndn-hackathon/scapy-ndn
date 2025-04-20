@@ -1,7 +1,8 @@
 # -*- mode: python -*-
 
-from scapy.fields import PacketListField, StrLenField
+from scapy.fields import StrLenField
 from scapyndn.pkt import (
+    _NdnPacketList_metaclass,
     NdnTypeField,
     NdnLenField,
     NdnBasePacket,
@@ -168,19 +169,9 @@ class LocalUri(NdnBasePacket):
     ]
 
 
-class ChannelStatus(NdnBasePacket):
-
-    TYPES_TO_CLS = {CONTROL_CMD_TYPES["LocalUri"]: LocalUri}
-
-    fields_desc = [
-        NdnTypeField(NFD_CHANNEL_DATASET_CLS_TO_TYPE["ChannelStatus"]),
-        NdnLenField(),
-        PacketListField("value", [],
-                        next_cls_cb=lambda pkt, lst, cur, remain:
-                        pkt.guess_ndn_packets(lst, cur, remain,
-                                              ChannelStatus.TYPES_TO_CLS),
-                        length_from=lambda pkt: pkt.length)
-    ]
+class ChannelStatus(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = NFD_CHANNEL_DATASET_CLS_TO_TYPE["ChannelStatus"]
+    TypesToCls = {CONTROL_CMD_TYPES["LocalUri"]: LocalUri}
 
 
 bind_content_cls_dict_to_data_name("/localhost/nfd/faces/channels", {
@@ -205,40 +196,20 @@ class Cost(NonNegativeIntBase):
     NdnType = NFD_MGMT_TYPES["Cost"]
 
 
-class NextHopRecord(NdnBasePacket):
-
-    TYPES_TO_CLS = {
+class NextHopRecord(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = NFD_MGMT_TYPES["NextHopRecord"]
+    TypeToCls = {
         NFD_MGMT_TYPES["FaceId"]: FaceId,
         NFD_MGMT_TYPES["Cost"]: Cost
     }
 
-    fields_desc = [
-        NdnTypeField(NFD_MGMT_TYPES["NextHopRecord"]),
-        NdnLenField(),
-        PacketListField("value", [],
-                        next_cls_cb=lambda pkt, lst, cur, remain:
-                        pkt.guess_ndn_packets(lst, cur, remain,
-                                              NextHopRecord.TYPES_TO_CLS),
-                        length_from=lambda pkt: pkt.length)
-    ]
 
-
-class NfdFib(NdnBasePacket):
-
-    TYPES_TO_CLS = {
+class NfdFib(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = NFD_MGMT_TYPES["NfdFib"]
+    TypeToCls = {
         TYPES["Name"]: Name,
         NFD_MGMT_TYPES["NextHopRecord"]: NextHopRecord
     }
-
-    fields_desc = [
-        NdnTypeField(NFD_MGMT_TYPES["NfdFib"]),
-        NdnLenField(),
-        PacketListField("value", [],
-                        next_cls_cb=lambda pkt, lst, cur, remain:
-                        pkt.guess_ndn_packets(lst, cur, remain,
-                                              NfdFib.TYPES_TO_CLS),
-                        length_from=lambda pkt: pkt.length)
-    ]
 
 
 class Origin(NonNegativeIntBase):
@@ -253,8 +224,9 @@ class Flags(NonNegativeIntBase):
     NdnType = CONTROL_CMD_TYPES["Flags"]
 
 
-class ControlParameters(NdnBasePacket):
-    TYPES_TO_CLS = {
+class ControlParameters(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = CONTROL_CMD_TYPES["ControlParameters"]
+    TypeToCls = {
         CONTROL_CMD_TYPES["FaceId"]: FaceId,
         CONTROL_CMD_TYPES["Uri"]: Uri,
         CONTROL_CMD_TYPES["Cost"]: Cost,
@@ -262,16 +234,6 @@ class ControlParameters(NdnBasePacket):
         CONTROL_CMD_TYPES["Flags"]: Flags,
         TYPES["Name"]: Name,
     }
-
-    fields_desc = [
-        NdnTypeField(CONTROL_CMD_TYPES["ControlParameters"]),
-        NdnLenField(),
-        PacketListField("value", [],
-                        next_cls_cb=lambda pkt, lst, cur, remain:
-                        pkt.guess_ndn_packets(lst, cur, remain,
-                                              ControlParameters.TYPES_TO_CLS),
-                        length_from=lambda pkt: pkt.length)
-    ]
 
 
 class StatusCode(NonNegativeIntBase):
@@ -286,23 +248,13 @@ class StatusText(NdnBasePacket):
     ]
 
 
-class ControlResponse(NdnBasePacket):
-    # print(CONTROL_CMD_TYPES["ControlParameters"])
-    TYPES_TO_CLS = {
+class ControlResponse(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = CONTROL_CMD_TYPES["ControlResponse"]
+    TypeToCls = {
         CONTROL_CMD_TYPES["StatusCode"]: StatusCode,
         CONTROL_CMD_TYPES["StatusText"]: StatusText,
         CONTROL_CMD_TYPES["ControlParameters"]: ControlParameters
     }
-
-    fields_desc = [
-        NdnTypeField(CONTROL_CMD_TYPES["ControlResponse"]),
-        NdnLenField(),
-        PacketListField("value", [],
-                        next_cls_cb=lambda pkt, lst, cur, remain:
-                        pkt.guess_ndn_packets(lst, cur, remain,
-                                              ControlResponse.TYPES_TO_CLS),
-                        length_from=lambda pkt: pkt.length)
-    ]
 
 
 bind_content_cls_to_data_name("/localhost/nfd/fib/list", NfdFib)
@@ -365,9 +317,9 @@ class NOutBytes(NonNegativeIntBase):
     NdnType = FACE_MGMT_CLS_TO_TYPE["NOutBytes"]
 
 
-class FaceStatus(NdnBasePacket):
-
-    TYPES_TO_CLS = {
+class FaceStatus(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = FACE_MGMT_CLS_TO_TYPE["FaceStatus"]
+    TypeToCls = {
         NFD_MGMT_TYPES["FaceId"]: FaceId,
         CONTROL_CMD_TYPES["Uri"]: Uri,
         CONTROL_CMD_TYPES["LocalUri"]: LocalUri,
@@ -390,16 +342,6 @@ class FaceStatus(NdnBasePacket):
         CONTROL_CMD_TYPES["Flags"]: Flags
     }
 
-    fields_desc = [
-        NdnTypeField(FACE_MGMT_CLS_TO_TYPE["FaceStatus"]),
-        NdnLenField(),
-        PacketListField("value", [],
-                        next_cls_cb=lambda pkt, lst, cur, remain:
-                        pkt.guess_ndn_packets(lst, cur, remain,
-                                              FaceStatus.TYPES_TO_CLS),
-                        length_from=lambda pkt: pkt.length)
-    ]
-
 
 bind_content_cls_dict_to_data_name("/localhost/nfd/faces/list", {
    FACE_MGMT_CLS_TO_TYPE["FaceStatus"]: FaceStatus
@@ -411,30 +353,19 @@ STRATEGY_MGMT_TYPE_TO_CLS = {
     "StrategyChoice": 128
 }
 
-class Strategy(NdnBasePacket):
 
-    fields_desc = [
-        NdnTypeField(STRATEGY_MGMT_TYPE_TO_CLS["Strategy"]),
-        NdnLenField(),
-        PacketListField("value", [], Name)
-    ]
+class Strategy(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = STRATEGY_MGMT_TYPE_TO_CLS["Strategy"]
+    PktCls = Name
 
-class StrategyChoice(NdnBasePacket):
 
-    TYPES_TO_CLS = {
+class StrategyChoice(NdnBasePacket,
+                     metaclass=_NdnPacketList_metaclass):
+    NdnType = STRATEGY_MGMT_TYPE_TO_CLS["StrategyChoice"]
+    TypeToCls = {
         TYPES["Name"]: Name,
         STRATEGY_MGMT_TYPE_TO_CLS["Strategy"]: Strategy,
     }
-
-    fields_desc = [
-        NdnTypeField(STRATEGY_MGMT_TYPE_TO_CLS["StrategyChoice"]),
-        NdnLenField(),
-        PacketListField("value", [],
-                        next_cls_cb=lambda pkt, lst, cur, remain:
-                        pkt.guess_ndn_packets(lst, cur, remain,
-                                              StrategyChoice.TYPES_TO_CLS),
-                        length_from=lambda pkt: pkt.length)
-    ]
 
 
 bind_content_cls_dict_to_data_name("/localhost/nfd/strategy-choice/list", {
