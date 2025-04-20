@@ -379,7 +379,16 @@ bind_component_cls_dict_to_name("/localhost/nfd/strategy-choice/set", 0,
                                  ControlParameters})
 
 
+bind_component_cls_dict_to_name("/localhost/nfd/strategy-choice/unset", 0,
+                                {CONTROL_CMD_TYPES["ControlParameters"]:
+                                 ControlParameters})
+
+
 bind_content_cls_to_data_name("/localhost/nfd/strategy-choice/set",
+                              ControlResponse)
+
+
+bind_content_cls_to_data_name("/localhost/nfd/strategy-choice/unset",
                               ControlResponse)
 
 
