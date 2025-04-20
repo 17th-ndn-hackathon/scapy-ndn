@@ -20,7 +20,8 @@ from scapyndn.contents.nfd import (
     Origin,
     Flags,
     ExpirationPeriod,
-    ControlParameters
+    ControlParameters,
+    Strategy
 )
 from scapyndn.key_chain import get_signed_interest_with_default_key
 from ndn.transport.stream_face import TcpFace
@@ -69,8 +70,7 @@ async def main(parser, args):
             interest = Interest(value=n / CanBePrefix() / MustBeFresh())
             f.send(raw(interest))
         elif args.add is True:
-            name_to_reg = Name.get_name(args.prefix)
-            ctrl_param_val = name_to_reg
+            ctrl_param_val = Name.get_name(args.prefix)
             if args.nexthop is None:
                 print("Please provide nexthop")
                 f.shutdown()
@@ -98,8 +98,7 @@ async def main(parser, args):
             interest = get_signed_interest_with_default_key(interest_name_val)
             # interest.show2()
         elif args.remove is True:
-            name_to_reg = Name.get_name(args.prefix)
-            ctrl_param_val = name_to_reg
+            ctrl_param_val = Name.get_name(args.prefix)
             if args.nexthop is not None:
                 try:
                     ctrl_param_val /= FaceId(value=int(args.nexthop))
@@ -119,6 +118,26 @@ async def main(parser, args):
                      NameComponent(value="nfd") /
                      NameComponent(value="strategy-choice") /
                      NameComponent(value="list"))
+            interest = Interest(value=n / CanBePrefix() / MustBeFresh())
+        if args.set is True:
+            if args.prefix is None or args.strategy is None:
+                print("Need --prefix <> --strategy <>")
+                f.shutdown()
+                sys.exit(1)
+
+            strategy = Strategy(value=Name.get_name(args.strategy))
+            cp = ControlParameters(value=Name.get_name(args.prefix) / strategy)
+            interest_name_val = \
+                Name.concat_comp_from_str("/localhost/nfd/strategy-choice/set")
+            interest_name_val /= NameComponent(value=cp)
+            interest = get_signed_interest_with_default_key(interest_name_val)
+            # interest.show2()
+    elif args.command == "cs":
+        if args.info is True:
+            n = Name(value=NameComponent(value="localhost") /
+                     NameComponent(value="nfd") /
+                     NameComponent(value="cs") /
+                     NameComponent(value="info"))
             interest = Interest(value=n / CanBePrefix() / MustBeFresh())
 
     if interest is not None:
@@ -146,11 +165,13 @@ def entry():
                        help="print general status")
 
     parser_b = subparsers.add_parser("strategy", help="strategy subcommand")
-    group = parser_b.add_mutually_exclusive_group()
+    group = parser_b.add_argument_group()
     group.add_argument("--list", action="store_true",
                        help="print general status")
-    group.add_argument("--show", action="store_true",
+    group.add_argument("--set", action="store_true",
                        help="print general status")
+    group.add_argument("--prefix", action="store", help="")
+    group.add_argument("--strategy", action="store", help="")
 
     parser_c = subparsers.add_parser("route", help="route subcommand")
     group = parser_c.add_argument_group()
@@ -165,6 +186,11 @@ def entry():
     group.add_argument("--flags", action="store", type=int, default=1,
                        help="child-inherit=1, capture=2")
     group.add_argument("--expiration", action="store", type=int, help="")
+
+    parser_d = subparsers.add_parser("cs", help="strategy subcommand")
+    group = parser_d.add_mutually_exclusive_group()
+    group.add_argument("--info", action="store_true",
+                       help="print general status")
 
     args = parser.parse_args()
     # print(args)

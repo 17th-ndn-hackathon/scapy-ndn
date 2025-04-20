@@ -152,6 +152,7 @@ CONTROL_CMD_TYPES = {
     "ControlResponse": 101,                # 0x65
     "StatusCode": 102,                     # 0x66
     "StatusText": 103,                     # 0x67
+    "Strategy": 107                        # 0x6b
 }
 
 
@@ -224,15 +225,21 @@ class Flags(NonNegativeIntBase):
     NdnType = CONTROL_CMD_TYPES["Flags"]
 
 
+class Strategy(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = CONTROL_CMD_TYPES["Strategy"]
+    PktCls = Name
+
+
 class ControlParameters(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
     NdnType = CONTROL_CMD_TYPES["ControlParameters"]
     TypeToCls = {
+        TYPES["Name"]: Name,
         CONTROL_CMD_TYPES["FaceId"]: FaceId,
         CONTROL_CMD_TYPES["Uri"]: Uri,
         CONTROL_CMD_TYPES["Cost"]: Cost,
         CONTROL_CMD_TYPES["Origin"]: Origin,
         CONTROL_CMD_TYPES["Flags"]: Flags,
-        TYPES["Name"]: Name,
+        CONTROL_CMD_TYPES["Strategy"]: Strategy
     }
 
 
@@ -349,14 +356,8 @@ bind_content_cls_dict_to_data_name("/localhost/nfd/faces/list", {
 
 
 STRATEGY_MGMT_TYPE_TO_CLS = {
-    "Strategy": 107,
     "StrategyChoice": 128
 }
-
-
-class Strategy(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
-    NdnType = STRATEGY_MGMT_TYPE_TO_CLS["Strategy"]
-    PktCls = Name
 
 
 class StrategyChoice(NdnBasePacket,
@@ -364,10 +365,56 @@ class StrategyChoice(NdnBasePacket,
     NdnType = STRATEGY_MGMT_TYPE_TO_CLS["StrategyChoice"]
     TypeToCls = {
         TYPES["Name"]: Name,
-        STRATEGY_MGMT_TYPE_TO_CLS["Strategy"]: Strategy,
+        CONTROL_CMD_TYPES["Strategy"]: Strategy,
     }
 
 
 bind_content_cls_dict_to_data_name("/localhost/nfd/strategy-choice/list", {
     STRATEGY_MGMT_TYPE_TO_CLS["StrategyChoice"]: StrategyChoice
+})
+
+
+bind_component_cls_dict_to_name("/localhost/nfd/strategy-choice/set", 0,
+                                {CONTROL_CMD_TYPES["ControlParameters"]:
+                                 ControlParameters})
+
+
+bind_content_cls_to_data_name("/localhost/nfd/strategy-choice/set",
+                              ControlResponse)
+
+
+CS_MGMT_TYPE_TO_CLS = {
+    "CsInfo": 128,
+    "Capacity": 131,
+    "Flags": 108,
+    "NHits": 129,
+    "NMisses": 130
+}
+
+
+class Capacity(NonNegativeIntBase):
+    NdnType = CS_MGMT_TYPE_TO_CLS["Capacity"]
+
+
+class NHits(NonNegativeIntBase):
+    NdnType = CS_MGMT_TYPE_TO_CLS["Capacity"]
+
+
+class NMisses(NonNegativeIntBase):
+    NdnType = CS_MGMT_TYPE_TO_CLS["Capacity"]
+
+
+class CsInfo(NdnBasePacket, metaclass=_NdnPacketList_metaclass):
+    NdnType = CS_MGMT_TYPE_TO_CLS["CsInfo"]
+    TypeToCls = {
+        CS_MGMT_TYPE_TO_CLS["Capacity"]: Capacity,
+        CS_MGMT_TYPE_TO_CLS["Flags"]: Flags,
+        NFD_GENERAL_DATASETS_CLS_TO_TYPE["NCsEntries"]: NCsEntries,
+        CS_MGMT_TYPE_TO_CLS["NHits"]: NHits,
+        CS_MGMT_TYPE_TO_CLS["NMisses"]: NMisses
+    }
+
+
+bind_content_cls_dict_to_data_name("/localhost/nfd/cs/info", {
+    CS_MGMT_TYPE_TO_CLS["CsInfo"]: CsInfo
 })
