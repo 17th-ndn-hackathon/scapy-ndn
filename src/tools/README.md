@@ -22,3 +22,7 @@ Strategy management:
     sn-nfdc strategy --set --prefix /test/ndn2 --strategy /localhost/nfd/strategy/multicast/v=5
 
     sn-nfdc strategy --unset --prefix /test/ndn2
+
+Content Store management:
+
+    sn-nfdc cs --info

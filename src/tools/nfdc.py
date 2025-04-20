@@ -142,7 +142,8 @@ async def main(parser, args):
 
             cp = ControlParameters(value=Name.get_name(args.prefix))
             interest_name_val = \
-                Name.concat_comp_from_str("/localhost/nfd/strategy-choice/unset")
+                Name.concat_comp_from_str(
+                    "/localhost/nfd/strategy-choice/unset")
             interest_name_val /= NameComponent(value=cp)
             interest = get_signed_interest_with_default_key(interest_name_val)
     elif args.command == "cs":

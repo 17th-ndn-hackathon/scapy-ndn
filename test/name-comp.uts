@@ -19,7 +19,6 @@ assert nc.type == TYPES["GenericNameComponent"]
 assert nc.length == None
 nc.show2()
 assert nc.value == b"ndn-cxx"
-print(nc.to_uri())
 assert nc.to_uri() == "ndn-cxx"
 
 rnc = raw(nc)
@@ -64,9 +63,19 @@ n.show2()
 
 #= Control Params in NameComponent
 
-nc = NameComponent(b'\x08\x1ch\x1a\x07\x0b\x08\x04test\x08\x03ndni\x02\x01\x03o\x01\xffj\x01dl\x01\x01')
-nc.show2()
+nc_b = b'\x08\x1ch\x1a\x07\x0b\x08\x04test\x08\x03ndni\x02\x01\x03o\x01\xffj\x01dl\x01\x01'
 
+nc = NameComponent(nc_b)
+nc.show2()
+assert nc.value == b'h\x1a\x07\x0b\x08\x04test\x08\x03ndni\x02\x01\x03o\x01\xffj\x01dl\x01\x01'
+
+nc = NameComponentBlock(nc_b)
+nc.show2()
+assert Block in nc
+
+nc = NameComponent(value=ControlParameters()/ControlParameters())
+print(nc.to_uri())
+nc.show2()
 
 #= To number/double uri
 
@@ -75,3 +84,6 @@ assert nc.to_uri() == "d"
 
 nc = DoubleNameComponent(value=100.2)
 assert nc.to_uri() == "%40Y%0c%cc%cc%cc%cc%cd"
+
+nc = NonNegIntNameComponent(value=0)
+assert nc.to_uri() == "%00"
