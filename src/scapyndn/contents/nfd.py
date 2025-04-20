@@ -130,7 +130,7 @@ bind_content_cls_dict_to_data_name("/localhost/nfd/status/general", {
     NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutData"]: NOutData,
     NFD_GENERAL_DATASETS_CLS_TO_TYPE["NOutNacks"]: NOutNacks,
     NFD_GENERAL_DATASETS_CLS_TO_TYPE["NSatisfiedInterests"]:
-    NSatisfiedInterests,
+        NSatisfiedInterests,
     NFD_GENERAL_DATASETS_CLS_TO_TYPE["NUnsatisfiedInterests"]:
         NUnsatisfiedInterests,
 })

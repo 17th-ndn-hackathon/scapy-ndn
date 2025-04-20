@@ -133,6 +133,7 @@ async def main(parser, args):
     else:
         parser.print_help()
 
+
 def entry():
     parser = argparse.ArgumentParser(prog="sn-nfdc")
     subparsers = parser.add_subparsers(dest="command", help="subcommand help")
